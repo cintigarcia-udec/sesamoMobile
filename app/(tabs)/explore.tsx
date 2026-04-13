@@ -1,112 +1,153 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import { useRouter } from "expo-router";
+import { Pressable, View, useWindowDimensions } from "react-native";
 
-import { Collapsible } from '@/components/ui/collapsible';
-import { ExternalLink } from '@/components/external-link';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { Fonts } from '@/constants/theme';
+import { AppCard } from "@/components/design/app-card";
+import { AppScreen } from "@/components/design/app-screen";
+import { AppText } from "@/components/design/app-text";
+import { TopAppBar } from "@/components/design/top-app-bar";
+import { useThemeColor } from "@/hooks/use-theme-color";
 
-export default function TabTwoScreen() {
+const DOMAINS = [
+  {
+    key: "logic",
+    title: "Logic Systems",
+    subtitle: "Algorithms & Complexity",
+    icon: "account-tree",
+  },
+  {
+    key: "math",
+    title: "Math for Systems",
+    subtitle: "Discrete & Applied",
+    icon: "functions",
+  },
+  {
+    key: "coding",
+    title: "Coding Syntax",
+    subtitle: "Patterns & Craft",
+    icon: "code",
+  },
+  {
+    key: "ds",
+    title: "Data Structures",
+    subtitle: "Trees, Graphs, Hashing",
+    icon: "schema",
+  },
+  {
+    key: "soft",
+    title: "Soft Skills",
+    subtitle: "Communication & Teams",
+    icon: "psychology",
+  },
+];
+
+export default function ExploreScreen() {
+  const router = useRouter();
+  const { width } = useWindowDimensions();
+  const primary = useThemeColor({}, "primary");
+  const surfaceHighest = useThemeColor({}, "surfaceContainerHighest");
+
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#D0D0D0', dark: '#353636' }}
-      headerImage={
-        <IconSymbol
-          size={310}
-          color="#808080"
-          name="chevron.left.forwardslash.chevron.right"
-          style={styles.headerImage}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText
-          type="title"
-          style={{
-            fontFamily: Fonts.rounded,
-          }}>
-          Explore
-        </ThemedText>
-      </ThemedView>
-      <ThemedText>This app includes example code to help you get started.</ThemedText>
-      <Collapsible title="File-based routing">
-        <ThemedText>
-          This app has two screens:{' '}
-          <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> and{' '}
-          <ThemedText type="defaultSemiBold">app/(tabs)/explore.tsx</ThemedText>
-        </ThemedText>
-        <ThemedText>
-          The layout file in <ThemedText type="defaultSemiBold">app/(tabs)/_layout.tsx</ThemedText>{' '}
-          sets up the tab navigator.
-        </ThemedText>
-        <ExternalLink href="https://docs.expo.dev/router/introduction">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Android, iOS, and web support">
-        <ThemedText>
-          You can open this project on Android, iOS, and the web. To open the web version, press{' '}
-          <ThemedText type="defaultSemiBold">w</ThemedText> in the terminal running this project.
-        </ThemedText>
-      </Collapsible>
-      <Collapsible title="Images">
-        <ThemedText>
-          For static images, you can use the <ThemedText type="defaultSemiBold">@2x</ThemedText> and{' '}
-          <ThemedText type="defaultSemiBold">@3x</ThemedText> suffixes to provide files for
-          different screen densities
-        </ThemedText>
-        <Image
-          source={require('@/assets/images/react-logo.png')}
-          style={{ width: 100, height: 100, alignSelf: 'center' }}
-        />
-        <ExternalLink href="https://reactnative.dev/docs/images">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Light and dark mode components">
-        <ThemedText>
-          This template has light and dark mode support. The{' '}
-          <ThemedText type="defaultSemiBold">useColorScheme()</ThemedText> hook lets you inspect
-          what the user&apos;s current color scheme is, and so you can adjust UI colors accordingly.
-        </ThemedText>
-        <ExternalLink href="https://docs.expo.dev/develop/user-interface/color-themes/">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Animations">
-        <ThemedText>
-          This template includes an example of an animated component. The{' '}
-          <ThemedText type="defaultSemiBold">components/HelloWave.tsx</ThemedText> component uses
-          the powerful{' '}
-          <ThemedText type="defaultSemiBold" style={{ fontFamily: Fonts.mono }}>
-            react-native-reanimated
-          </ThemedText>{' '}
-          library to create a waving hand animation.
-        </ThemedText>
-        {Platform.select({
-          ios: (
-            <ThemedText>
-              The <ThemedText type="defaultSemiBold">components/ParallaxScrollView.tsx</ThemedText>{' '}
-              component provides a parallax effect for the header image.
-            </ThemedText>
-          ),
-        })}
-      </Collapsible>
-    </ParallaxScrollView>
+    <AppScreen
+      contentContainerStyle={{
+        paddingTop: 92,
+        paddingHorizontal: 20,
+        maxWidth: 1100,
+        width: "100%",
+        alignSelf: "center",
+        gap: 18,
+      }}
+    >
+      <TopAppBar
+        title="Explore"
+        left={<MaterialIcons name="explore" size={22} color={primary} />}
+        right={
+          <View
+            accessibilityLabel="Perfil"
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: 999,
+              backgroundColor: surfaceHighest,
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <AppText variant="labelCaps" colorName="primary">
+              AR
+            </AppText>
+          </View>
+        }
+      />
+
+      <View style={{ gap: 6 }}>
+        <AppText variant="headline" colorName="primary">
+          Domains of Study
+        </AppText>
+        <AppText
+          variant="body"
+          colorName="secondary"
+          style={{ opacity: 0.85, maxWidth: 720 }}
+        >
+          Browse the system architecture of your curriculum. Each domain is a
+          pillar with its own assessments, feedback loops, and progression.
+        </AppText>
+      </View>
+
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 14 }}>
+        {DOMAINS.map((d) => (
+          <Pressable
+            key={d.key}
+            accessibilityRole="button"
+            accessibilityLabel={`Abrir ${d.title}`}
+            onPress={() => router.push("/quiz/questions" as any)}
+            style={({ pressed }) => [
+              {
+                width: width >= 900 ? "32%" : width >= 520 ? "48%" : "100%",
+                transform: [{ scale: pressed ? 0.985 : 1 }],
+              },
+            ]}
+          >
+            <AppCard tone="low" style={{ gap: 12 }}>
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                }}
+              >
+                <View
+                  style={{
+                    width: 44,
+                    height: 44,
+                    borderRadius: 14,
+                    backgroundColor: `${primary}14`,
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <MaterialIcons
+                    name={d.icon as any}
+                    size={22}
+                    color={primary}
+                  />
+                </View>
+                <MaterialIcons name="chevron-right" size={22} color={primary} />
+              </View>
+              <View style={{ gap: 4 }}>
+                <AppText variant="title">{d.title}</AppText>
+                <AppText
+                  variant="labelCaps"
+                  colorName="secondary"
+                  style={{ opacity: 0.8 }}
+                >
+                  {d.subtitle}
+                </AppText>
+              </View>
+            </AppCard>
+          </Pressable>
+        ))}
+      </View>
+    </AppScreen>
   );
 }
-
-const styles = StyleSheet.create({
-  headerImage: {
-    color: '#808080',
-    bottom: -90,
-    left: -35,
-    position: 'absolute',
-  },
-  titleContainer: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-});
