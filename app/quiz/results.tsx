@@ -49,7 +49,7 @@ export default function QuizResultsScreen() {
       }}
     >
       <TopAppBar
-        title="Academy"
+        title="Academia"
         left={
           <View
             accessibilityLabel="Avatar de usuario"
@@ -119,7 +119,7 @@ export default function QuizResultsScreen() {
           >
             <MaterialIcons name="verified" size={16} color="#ffffff" />
             <AppText variant="labelCaps" style={{ color: "#ffffff" }}>
-              Assessment Complete
+              Evaluación completada
             </AppText>
           </View>
           <AppText
@@ -146,12 +146,12 @@ export default function QuizResultsScreen() {
             variant="headline"
             style={{ color: "#ffffff", opacity: 0.9, fontSize: 24 }}
           >
-            Status:{" "}
+            Estado:{" "}
             {score >= 85
-              ? "Mastered"
+              ? "Dominado"
               : score >= 70
-                ? "Validated"
-                : "Needs Review"}
+                ? "Aprobado"
+                : "Requiere repaso"}
           </AppText>
 
           <View
@@ -168,7 +168,7 @@ export default function QuizResultsScreen() {
                 <MaterialIcons name="visibility" size={18} color={primary} />
               }
             >
-              Review Answers
+              Revisar respuestas
             </AppButton>
             <AppButton
               onPress={() => router.replace("/(tabs)" as any)}
@@ -177,7 +177,7 @@ export default function QuizResultsScreen() {
                 <MaterialIcons name="school" size={18} color="#ffffff" />
               }
             >
-              Back to Academy
+              Volver a la academia
             </AppButton>
           </View>
         </View>
@@ -186,7 +186,7 @@ export default function QuizResultsScreen() {
       <View style={{ flexDirection: isWide ? "row" : "column", gap: 14 }}>
         <AppCard tone="low" style={{ flex: isWide ? 2 : undefined, gap: 12 }}>
           <AppText variant="title" colorName="primary">
-            Performance Metrics
+            Métricas de rendimiento
           </AppText>
           <View style={{ flexDirection: "row", gap: 10 }}>
             <View
@@ -202,7 +202,7 @@ export default function QuizResultsScreen() {
                 colorName="secondary"
                 style={{ opacity: 0.8 }}
               >
-                Correct Answers
+                Respuestas correctas
               </AppText>
               <View
                 style={{
@@ -241,7 +241,7 @@ export default function QuizResultsScreen() {
                 colorName="secondary"
                 style={{ opacity: 0.8 }}
               >
-                Time Taken
+                Tiempo
               </AppText>
               <View
                 style={{
@@ -294,14 +294,14 @@ export default function QuizResultsScreen() {
               colorName="secondary"
               style={{ opacity: 0.7 }}
             >
-              Accuracy: {score}%
+              Precisión: {score}%
             </AppText>
             <AppText
               variant="labelCaps"
               colorName="secondary"
               style={{ opacity: 0.7 }}
             >
-              Target: 75%
+              Meta: 75%
             </AppText>
           </View>
         </AppCard>
@@ -319,7 +319,7 @@ export default function QuizResultsScreen() {
           >
             <View>
               <AppText variant="title" style={{ color: onTertiaryContainer }}>
-                Global Rank
+                Ranking global
               </AppText>
               <AppText
                 variant="body"
@@ -329,7 +329,8 @@ export default function QuizResultsScreen() {
                   marginTop: 6,
                 }}
               >
-                You performed better than 94% of engineering students this week.
+                Esta semana tu rendimiento fue mejor que el de 94% de
+                estudiantes de ingeniería.
               </AppText>
             </View>
             <AppText
@@ -357,7 +358,7 @@ export default function QuizResultsScreen() {
         >
           <MaterialIcons name="psychology" size={22} color={primary} />
           <AppText variant="headline" style={{ fontSize: 22 }}>
-            Technical Feedback
+            Retroalimentación técnica
           </AppText>
         </View>
 
@@ -376,16 +377,16 @@ export default function QuizResultsScreen() {
           </View>
           <View style={{ flex: 1, gap: 6 }}>
             <AppText variant="title" colorName="primary">
-              Mastery in Data Structures
+              Dominio en estructuras de datos
             </AppText>
             <AppText
               variant="body"
               colorName="secondary"
               style={{ fontSize: 13, opacity: 0.9 }}
             >
-              Your implementation logic for Linked Lists and Binary Trees is
-              flawless. You correctly identified complexity across traversal
-              scenarios.
+              Tu lógica de implementación para listas enlazadas y árboles
+              binarios es sólida. Identificaste correctamente la complejidad en
+              escenarios de recorrido.
             </AppText>
           </View>
         </AppCard>
@@ -406,16 +407,16 @@ export default function QuizResultsScreen() {
           <View style={{ flex: 1, gap: 10 }}>
             <View style={{ gap: 6 }}>
               <AppText variant="title" colorName="tertiary">
-                Recommendation: Recursive Complexity
+                Recomendación: complejidad recursiva
               </AppText>
               <AppText
                 variant="body"
                 colorName="secondary"
                 style={{ fontSize: 13, opacity: 0.9 }}
               >
-                While your logic is sound, we noticed a minor struggle with Big
-                O notation for recursive functions. Reviewing the Master Theorem
-                could help.
+                Aunque tu razonamiento es correcto, se notó una pequeña
+                dificultad con la notación Big O en funciones recursivas.
+                Repasar el Teorema Maestro puede ayudarte.
               </AppText>
             </View>
             <CodeBlock>{`T(n) = aT(n/b) + f(n)\n\nUse the Master Theorem to compare:\n  n^(log_b a)  vs  f(n)`}</CodeBlock>

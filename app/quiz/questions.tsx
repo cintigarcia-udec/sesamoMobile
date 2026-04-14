@@ -1,7 +1,13 @@
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
-import { Pressable, View, useWindowDimensions } from "react-native";
+import {
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  View,
+  useWindowDimensions,
+} from "react-native";
 
 import { AppButton } from "@/components/design/app-button";
 import { AppCard } from "@/components/design/app-card";
@@ -39,8 +45,9 @@ export default function QuizQuestionsScreen() {
   const secondary = useThemeColor({}, "secondary");
   const surfaceHighest = useThemeColor({}, "surfaceContainerHighest");
   const surfaceLowest = useThemeColor({}, "surfaceContainerLowest");
+  const outlineVariant = useThemeColor({}, "outlineVariant");
 
-  const questions = useMemo<Question[]>(
+  const mockQuestions = useMemo<Question[]>(
     () => [
       {
         id: "bst-search",
@@ -82,13 +89,29 @@ export default function QuizQuestionsScreen() {
     [],
   );
 
+  const questions = mockQuestions;
   const total = questions.length;
   const [index, setIndex] = useState(0);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [correctCount, setCorrectCount] = useState(0);
   const [secondsLeft, setSecondsLeft] = useState(15 * 60);
 
-  const q = questions[index]!;
+  const [isLoadingQuestions, setIsLoadingQuestions] = useState(true);
+  const [isLoadingOptions, setIsLoadingOptions] = useState(true);
+
+  useEffect(() => {
+    const id = setTimeout(() => setIsLoadingQuestions(false), 600);
+    return () => clearTimeout(id);
+  }, []);
+
+  useEffect(() => {
+    if (isLoadingQuestions) return;
+    setIsLoadingOptions(true);
+    const id = setTimeout(() => setIsLoadingOptions(false), 450);
+    return () => clearTimeout(id);
+  }, [index, isLoadingQuestions]);
+
+  const q = questions[index] ?? questions[0]!;
   const progress = (index + 1) / total;
 
   useEffect(() => {
@@ -113,31 +136,41 @@ export default function QuizQuestionsScreen() {
   }, [secondsLeft, correctCount, total, router]);
 
   const isWide = width >= 900;
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const submit = () => {
-    if (!selectedKey) return;
-    const isCorrect =
-      q.options.find((o) => o.key === selectedKey)?.correct === true;
-    const nextCorrectCount = correctCount + (isCorrect ? 1 : 0);
-    setCorrectCount(nextCorrectCount);
-    setSelectedKey(null);
-
-    if (index + 1 >= total) {
-      const score = Math.round((nextCorrectCount / total) * 100);
-      router.replace({
-        pathname: "/quiz/results" as any,
-        params: {
-          score: String(score),
-          correct: String(nextCorrectCount),
-          total: String(total),
-          time: formatTime(15 * 60 - secondsLeft),
-        },
-      });
+    if (!selectedKey || isSubmitting || isLoadingQuestions || isLoadingOptions)
       return;
-    }
+    setIsSubmitting(true);
 
-    setIndex((i) => i + 1);
+    setTimeout(() => {
+      const isCorrect =
+        q.options.find((o) => o.key === selectedKey)?.correct === true;
+      const nextCorrectCount = correctCount + (isCorrect ? 1 : 0);
+      setCorrectCount(nextCorrectCount);
+      setSelectedKey(null);
+      setIsSubmitting(false);
+
+      if (index + 1 >= total) {
+        const score = Math.round((nextCorrectCount / total) * 100);
+        router.replace({
+          pathname: "/quiz/results" as any,
+          params: {
+            score: String(score),
+            correct: String(nextCorrectCount),
+            total: String(total),
+            time: formatTime(15 * 60 - secondsLeft),
+          },
+        });
+        return;
+      }
+
+      setIndex((i) => i + 1);
+    }, 800);
   };
+
+  const isLastQuestion = index + 1 >= total;
+  const canInteract = !isLoadingQuestions && !isLoadingOptions && !isSubmitting;
 
   return (
     <AppScreen scroll={false} style={{ paddingTop: 0 }}>
@@ -202,209 +235,357 @@ export default function QuizQuestionsScreen() {
         }
       />
 
-      <View
-        style={{
-          flex: 1,
-          paddingTop: 92,
-          paddingHorizontal: 20,
-          maxWidth: 980,
-          width: "100%",
-          alignSelf: "center",
-        }}
-      >
-        <View style={{ marginBottom: 18, gap: 12 }}>
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "flex-end",
-              justifyContent: "space-between",
-              gap: 12,
-            }}
-          >
-            <View style={{ gap: 4 }}>
-              <AppText
-                variant="labelCaps"
-                colorName="secondary"
-                style={{ opacity: 0.8 }}
-              >
-                Assessment Progress
-              </AppText>
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "baseline",
-                  gap: 10,
-                }}
-              >
-                <AppText
-                  variant="headline"
-                  colorName="primary"
-                  style={{ fontSize: 52, lineHeight: 56 }}
-                >
-                  {String(index + 1).padStart(2, "0")}
-                </AppText>
-                <AppText
-                  variant="headline"
-                  colorName="outlineVariant"
-                  style={{ fontSize: 22 }}
-                >
-                  / {total}
-                </AppText>
-              </View>
-            </View>
+      <View style={{ flex: 1, paddingTop: 92 }}>
+        <ScrollView
+          contentContainerStyle={{
+            paddingHorizontal: 20,
+            paddingBottom: 130,
+            maxWidth: 980,
+            width: "100%",
+            alignSelf: "center",
+          }}
+        >
+          <View style={{ marginBottom: 14, gap: 12 }}>
             <View
               style={{
-                flex: 1,
-                maxWidth: 360,
-                height: 6,
-                borderRadius: 999,
-                backgroundColor: surfaceHighest,
-                overflow: "hidden",
+                flexDirection: "row",
+                alignItems: "flex-end",
+                justifyContent: "space-between",
+                gap: 12,
               }}
             >
-              <View
-                style={{
-                  width: `${Math.round(progress * 100)}%`,
-                  height: "100%",
-                  borderRadius: 999,
-                  backgroundColor: primary,
-                }}
-              />
-              <View
-                style={{
-                  position: "absolute",
-                  inset: 0,
-                  backgroundColor: primaryContainer,
-                  opacity: 0.25,
-                }}
-              />
-            </View>
-          </View>
-        </View>
-
-        <View
-          style={{ flex: 1, flexDirection: isWide ? "row" : "column", gap: 16 }}
-        >
-          <View style={{ flex: isWide ? 7 : undefined, gap: 16 }}>
-            <AppCard tone="low" style={{ padding: 22, gap: 16 }}>
-              <AppText
-                variant="headline"
-                colorName="onSurface"
-                style={{ fontSize: 24, lineHeight: 30 }}
-              >
-                {q.title}
-              </AppText>
-              <View style={{ gap: 10 }}>
+              <View style={{ gap: 4 }}>
                 <AppText
                   variant="labelCaps"
                   colorName="secondary"
                   style={{ opacity: 0.8 }}
                 >
-                  {q.contextLabel}
+                  Assessment Progress
                 </AppText>
-                <CodeBlock>{q.code}</CodeBlock>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "baseline",
+                    gap: 10,
+                  }}
+                >
+                  <AppText
+                    variant="headline"
+                    colorName="primary"
+                    style={{ fontSize: 52, lineHeight: 56 }}
+                  >
+                    {String(index + 1).padStart(2, "0")}
+                  </AppText>
+                  <AppText
+                    variant="headline"
+                    colorName="outlineVariant"
+                    style={{ fontSize: 22 }}
+                  >
+                    / {total}
+                  </AppText>
+                </View>
               </View>
-            </AppCard>
+              <View
+                style={{
+                  flex: 1,
+                  maxWidth: 360,
+                  height: 6,
+                  borderRadius: 999,
+                  backgroundColor: surfaceHighest,
+                  overflow: "hidden",
+                }}
+              >
+                <View
+                  style={{
+                    width: `${Math.round(progress * 100)}%`,
+                    height: "100%",
+                    borderRadius: 999,
+                    backgroundColor: primary,
+                  }}
+                />
+                <View
+                  style={{
+                    position: "absolute",
+                    inset: 0,
+                    backgroundColor: primaryContainer,
+                    opacity: 0.25,
+                  }}
+                />
+              </View>
+            </View>
           </View>
 
-          <View style={{ flex: isWide ? 5 : undefined, gap: 10 }}>
-            <AppText
-              variant="labelCaps"
-              colorName="secondary"
-              style={{ opacity: 0.8, paddingHorizontal: 6 }}
-            >
-              Select the correct notation
-            </AppText>
-            {q.options.map((opt) => {
-              const selected = opt.key === selectedKey;
-              return (
-                <Pressable
-                  key={opt.key}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Opción ${opt.key}: ${opt.title}`}
-                  onPress={() => setSelectedKey(opt.key)}
-                  style={({ pressed }) => [
-                    {
-                      borderRadius: 18,
-                      padding: 16,
-                      backgroundColor: selected
-                        ? surfaceLowest
-                        : surfaceHighest,
-                      transform: [{ scale: pressed ? 0.99 : 1 }],
-                      borderWidth: selected ? 2 : 0,
-                      borderColor: selected ? primary : "transparent",
-                    },
-                  ]}
-                >
-                  <View
+          {isLoadingQuestions ? (
+            <AppCard tone="low" style={{ padding: 22, gap: 12 }}>
+              <View
+                style={{ flexDirection: "row", alignItems: "center", gap: 10 }}
+              >
+                <ActivityIndicator color={primary} />
+                <View style={{ flex: 1, gap: 4 }}>
+                  <AppText variant="bodyStrong">Cargando preguntas</AppText>
+                  <AppText
+                    variant="label"
+                    colorName="secondary"
+                    style={{ opacity: 0.85 }}
+                  >
+                    Preparando el cuestionario...
+                  </AppText>
+                </View>
+              </View>
+              <View
+                style={{
+                  height: 10,
+                  borderRadius: 999,
+                  backgroundColor: surfaceHighest,
+                  overflow: "hidden",
+                }}
+              >
+                <View
+                  style={{
+                    width: "42%",
+                    height: "100%",
+                    backgroundColor: primary,
+                    opacity: 0.8,
+                  }}
+                />
+              </View>
+            </AppCard>
+          ) : (
+            <View style={{ flexDirection: isWide ? "row" : "column", gap: 16 }}>
+              <View style={{ flex: isWide ? 7 : undefined, gap: 12 }}>
+                <AppCard tone="low" style={{ padding: 22, gap: 14 }}>
+                  <View style={{ gap: 6 }}>
+                    <AppText
+                      variant="labelCaps"
+                      colorName="secondary"
+                      style={{ opacity: 0.8 }}
+                    >
+                      Pregunta
+                    </AppText>
+                    <AppText
+                      variant="headline"
+                      colorName="onSurface"
+                      style={{ fontSize: 24, lineHeight: 30 }}
+                    >
+                      {q.title}
+                    </AppText>
+                  </View>
+                  <View style={{ gap: 10 }}>
+                    <AppText
+                      variant="labelCaps"
+                      colorName="secondary"
+                      style={{ opacity: 0.8 }}
+                    >
+                      {q.contextLabel}
+                    </AppText>
+                    <CodeBlock>{q.code}</CodeBlock>
+                  </View>
+                </AppCard>
+              </View>
+
+              <View style={{ flex: isWide ? 5 : undefined, gap: 10 }}>
+                <View style={{ gap: 4, paddingHorizontal: 6 }}>
+                  <AppText
+                    variant="labelCaps"
+                    colorName="secondary"
+                    style={{ opacity: 0.8 }}
+                  >
+                    Opciones
+                  </AppText>
+                  <AppText
+                    variant="label"
+                    colorName="secondary"
+                    style={{ opacity: 0.75 }}
+                  >
+                    Selecciona una opción. Las opciones se cargan por pregunta.
+                  </AppText>
+                </View>
+
+                {isLoadingOptions ? (
+                  <AppCard
+                    tone="low"
                     style={{
+                      padding: 16,
+                      borderRadius: 18,
                       flexDirection: "row",
                       alignItems: "center",
-                      gap: 14,
+                      gap: 12,
                     }}
                   >
-                    <View
-                      style={{
-                        width: 40,
-                        height: 40,
-                        borderRadius: 12,
-                        backgroundColor: selected ? primary : surfaceLowest,
-                        alignItems: "center",
-                        justifyContent: "center",
-                      }}
-                    >
-                      <AppText
-                        variant="bodyStrong"
-                        style={{ color: selected ? "#ffffff" : primary }}
-                      >
-                        {opt.key}
-                      </AppText>
-                    </View>
-                    <View style={{ flex: 1, gap: 2 }}>
-                      <AppText
-                        variant="title"
-                        style={{
-                          fontSize: 18,
-                          color: selected ? primary : undefined,
-                        }}
-                      >
-                        {opt.title}
-                      </AppText>
+                    <ActivityIndicator color={primary} />
+                    <View style={{ flex: 1 }}>
+                      <AppText variant="bodyStrong">Cargando opciones</AppText>
                       <AppText
                         variant="label"
-                        colorName={selected ? "primary" : "secondary"}
-                        style={{ opacity: selected ? 0.75 : 0.8 }}
+                        colorName="secondary"
+                        style={{ opacity: 0.85 }}
                       >
-                        {opt.subtitle}
+                        Preparando opciones de respuesta...
                       </AppText>
                     </View>
-                    {selected ? (
-                      <MaterialIcons
-                        name="check-circle"
-                        size={20}
-                        color={primary}
-                      />
-                    ) : null}
-                  </View>
-                </Pressable>
-              );
-            })}
+                  </AppCard>
+                ) : (
+                  q.options.map((opt) => {
+                    const selected = opt.key === selectedKey;
+                    return (
+                      <Pressable
+                        key={opt.key}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Opción ${opt.key}: ${opt.title}`}
+                        disabled={!canInteract}
+                        onPress={() => setSelectedKey(opt.key)}
+                        style={({ pressed }) => [
+                          {
+                            borderRadius: 18,
+                            padding: 16,
+                            backgroundColor: selected
+                              ? surfaceLowest
+                              : surfaceHighest,
+                            transform: [{ scale: pressed ? 0.99 : 1 }],
+                            borderWidth: selected ? 2 : 1,
+                            borderColor: selected
+                              ? primary
+                              : `${outlineVariant}33`,
+                            opacity: !canInteract ? 0.6 : 1,
+                          },
+                        ]}
+                      >
+                        <View
+                          style={{
+                            flexDirection: "row",
+                            alignItems: "center",
+                            gap: 14,
+                          }}
+                        >
+                          <View
+                            style={{
+                              width: 40,
+                              height: 40,
+                              borderRadius: 12,
+                              backgroundColor: selected
+                                ? primary
+                                : surfaceLowest,
+                              alignItems: "center",
+                              justifyContent: "center",
+                            }}
+                          >
+                            <AppText
+                              variant="bodyStrong"
+                              style={{ color: selected ? "#ffffff" : primary }}
+                            >
+                              {opt.key}
+                            </AppText>
+                          </View>
+                          <View style={{ flex: 1, gap: 2 }}>
+                            <AppText
+                              variant="title"
+                              style={{
+                                fontSize: 18,
+                                color: selected ? primary : undefined,
+                              }}
+                            >
+                              {opt.title}
+                            </AppText>
+                            <AppText
+                              variant="label"
+                              colorName={selected ? "primary" : "secondary"}
+                              style={{ opacity: selected ? 0.75 : 0.8 }}
+                            >
+                              {opt.subtitle}
+                            </AppText>
+                          </View>
+                          {selected ? (
+                            <MaterialIcons
+                              name="check-circle"
+                              size={20}
+                              color={primary}
+                            />
+                          ) : null}
+                        </View>
+                      </Pressable>
+                    );
+                  })
+                )}
 
-            <View style={{ marginTop: 8 }}>
-              <AppButton
-                disabled={!selectedKey}
-                onPress={submit}
-                rightIcon={
-                  <MaterialIcons
-                    name="arrow-forward"
-                    size={18}
-                    color="#ffffff"
-                  />
-                }
-              >
-                Confirm Answer
-              </AppButton>
+                {isLastQuestion ? (
+                  <AppCard
+                    tone="lowest"
+                    style={{
+                      marginTop: 12,
+                      padding: 16,
+                      borderRadius: 18,
+                      gap: 8,
+                    }}
+                  >
+                    <AppText
+                      variant="labelCaps"
+                      colorName="secondary"
+                      style={{ opacity: 0.8 }}
+                    >
+                      Enviar respuestas
+                    </AppText>
+                    <AppText
+                      variant="label"
+                      colorName="secondary"
+                      style={{ opacity: 0.85 }}
+                    >
+                      Al finalizar guardaremos tu intento y verás tu resultado.
+                    </AppText>
+                  </AppCard>
+                ) : null}
+              </View>
             </View>
+          )}
+        </ScrollView>
+
+        <View
+          style={{
+            position: "absolute",
+            left: 0,
+            right: 0,
+            bottom: 0,
+            paddingHorizontal: 20,
+            paddingTop: 14,
+            paddingBottom: 18,
+            borderTopWidth: 1,
+            borderTopColor: `${outlineVariant}33`,
+            backgroundColor: surfaceHighest,
+          }}
+        >
+          <View
+            style={{
+              maxWidth: 980,
+              width: "100%",
+              alignSelf: "center",
+              gap: 8,
+            }}
+          >
+            <AppText
+              variant="label"
+              colorName="secondary"
+              style={{ opacity: 0.8 }}
+            >
+              {isLoadingQuestions
+                ? "Cargando preguntas…"
+                : isLoadingOptions
+                  ? "Cargando opciones…"
+                  : isLastQuestion
+                    ? "Última pregunta: confirma para enviar el intento."
+                    : "Confirma para continuar a la siguiente pregunta."}
+            </AppText>
+            <AppButton
+              disabled={!selectedKey || !canInteract}
+              onPress={submit}
+              rightIcon={
+                <MaterialIcons name="arrow-forward" size={18} color="#ffffff" />
+              }
+            >
+              {isSubmitting
+                ? "Enviando..."
+                : isLastQuestion
+                  ? "Enviar respuestas"
+                  : "Confirmar"}
+            </AppButton>
           </View>
         </View>
       </View>
