@@ -10,6 +10,8 @@ export default function AdminDashboardScreen() {
   const { width } = useWindowDimensions();
   const primary = useThemeColor({}, "primary");
   const secondary = useThemeColor({}, "secondary");
+  const primaryContainer = useThemeColor({}, "primaryContainer");
+  const onPrimaryContainer = useThemeColor({}, "onPrimaryContainer");
   const surfaceHighest = useThemeColor({}, "surfaceContainerHighest");
 
   const isWide = width >= 900;
@@ -17,7 +19,7 @@ export default function AdminDashboardScreen() {
   return (
     <AdminShell
       active="dashboard"
-      title="Admin Console"
+      title="Consola Admin"
       right={
         <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
@@ -27,7 +29,7 @@ export default function AdminDashboardScreen() {
               colorName="secondary"
               style={{ opacity: 0.85 }}
             >
-              Last backup: 2h ago
+              Último respaldo: hace 2 h
             </AppText>
           </View>
           <View
@@ -35,7 +37,7 @@ export default function AdminDashboardScreen() {
               width: 34,
               height: 34,
               borderRadius: 999,
-              backgroundColor: useThemeColor({}, "primaryContainer"),
+              backgroundColor: primaryContainer,
               alignItems: "center",
               justifyContent: "center",
             }}
@@ -43,7 +45,7 @@ export default function AdminDashboardScreen() {
             <MaterialIcons
               name="notifications"
               size={18}
-              color={useThemeColor({}, "onPrimaryContainer")}
+              color={onPrimaryContainer}
             />
           </View>
         </View>
@@ -55,7 +57,7 @@ export default function AdminDashboardScreen() {
           colorName="primary"
           style={{ fontSize: 32 }}
         >
-          Global Performance Metrics
+          Métricas globales de rendimiento
         </AppText>
         <AppText
           variant="body"
@@ -84,7 +86,7 @@ export default function AdminDashboardScreen() {
             colorName="secondary"
             style={{ opacity: 0.8 }}
           >
-            Average Score
+            Puntaje promedio
           </AppText>
           <AppText
             variant="headline"
@@ -105,7 +107,7 @@ export default function AdminDashboardScreen() {
             colorName="secondary"
             style={{ opacity: 0.8 }}
           >
-            Total Students
+            Total de estudiantes
           </AppText>
           <AppText
             variant="headline"
@@ -130,7 +132,7 @@ export default function AdminDashboardScreen() {
             colorName="secondary"
             style={{ opacity: 0.8 }}
           >
-            Growth Rate
+            Tasa de crecimiento
           </AppText>
           <AppText
             variant="headline"
@@ -144,7 +146,7 @@ export default function AdminDashboardScreen() {
 
       <View style={{ marginTop: 14 }}>
         <AppCard tone="low" style={{ borderRadius: 28, padding: 22, gap: 12 }}>
-          <AppText variant="title">System Health</AppText>
+          <AppText variant="title">Salud del sistema</AppText>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
             <View
               style={{
@@ -155,7 +157,7 @@ export default function AdminDashboardScreen() {
               }}
             />
             <AppText variant="bodyStrong" colorName="primary">
-              Cluster Healthy
+              Clúster saludable
             </AppText>
           </View>
           <View
@@ -175,7 +177,7 @@ export default function AdminDashboardScreen() {
             colorName="secondary"
             style={{ opacity: 0.85 }}
           >
-            No incidents detected in the last 24 hours.
+            No se detectaron incidentes en las últimas 24 horas.
           </AppText>
         </AppCard>
       </View>
