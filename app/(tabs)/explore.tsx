@@ -1,43 +1,43 @@
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { useRouter } from "expo-router";
-import { Pressable, View, useWindowDimensions } from "react-native";
+import { useState } from "react";
+import { Pressable, ScrollView, View, useWindowDimensions } from "react-native";
 
 import { AppCard } from "@/components/design/app-card";
+import { AppInput } from "@/components/design/app-input";
 import { AppScreen } from "@/components/design/app-screen";
 import { AppText } from "@/components/design/app-text";
 import { TopAppBar } from "@/components/design/top-app-bar";
 import { useThemeColor } from "@/hooks/use-theme-color";
 
-const DOMAINS = [
+const CATEGORIES = [
   {
-    key: "logic",
+    key: "cat-1",
     title: "Logic Systems",
-    subtitle: "Algorithms & Complexity",
     icon: "account-tree",
   },
   {
-    key: "math",
+    key: "cat-2",
     title: "Math for Systems",
-    subtitle: "Discrete & Applied",
     icon: "functions",
   },
+];
+
+const QUESTIONNAIRES = [
   {
-    key: "coding",
-    title: "Coding Syntax",
-    subtitle: "Patterns & Craft",
-    icon: "code",
+    id: "q-1",
+    categoryId: "cat-1",
+    title: "Algorithms & Complexity",
+    description:
+      "Test your knowledge on Big O notation and sorting algorithms.",
+    duration: "15 min",
   },
   {
-    key: "ds",
-    title: "Data Structures",
-    subtitle: "Trees, Graphs, Hashing",
-    icon: "schema",
-  },
-  {
-    key: "soft",
-    title: "Soft Skills",
-    subtitle: "Communication & Teams",
-    icon: "psychology",
+    id: "q-2",
+    categoryId: "cat-2",
+    title: "Discrete Mathematics",
+    description: "Graphs, logic and proofs.",
+    duration: "20 min",
   },
 ];
 
@@ -46,20 +46,33 @@ export default function ExploreScreen() {
   const { width } = useWindowDimensions();
   const primary = useThemeColor({}, "primary");
   const surfaceHighest = useThemeColor({}, "surfaceContainerHighest");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+
+  const filteredQuestionnaires = QUESTIONNAIRES.filter((q) => {
+    const matchesSearch = q.title
+      .toLowerCase()
+      .includes(searchQuery.toLowerCase());
+    const matchesCategory = selectedCategory
+      ? q.categoryId === selectedCategory
+      : true;
+    return matchesSearch && matchesCategory;
+  });
 
   return (
     <AppScreen
+      scroll
       contentContainerStyle={{
         paddingTop: 92,
         paddingHorizontal: 20,
         maxWidth: 1100,
         width: "100%",
         alignSelf: "center",
-        gap: 18,
+        gap: 24,
       }}
     >
       <TopAppBar
-        title="Explore"
+        title="Catálogo de Cuestionarios"
         left={<MaterialIcons name="explore" size={22} color={primary} />}
         right={
           <View
@@ -82,71 +95,141 @@ export default function ExploreScreen() {
 
       <View style={{ gap: 6 }}>
         <AppText variant="headline" colorName="primary">
-          Domains of Study
+          Explora
         </AppText>
         <AppText
           variant="body"
           colorName="secondary"
           style={{ opacity: 0.85, maxWidth: 720 }}
         >
-          Browse the system architecture of your curriculum. Each domain is a
-          pillar with its own assessments, feedback loops, and progression.
+          Encuentra cuestionarios organizados por categorías para evaluar tu
+          conocimiento.
         </AppText>
       </View>
 
-      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 14 }}>
-        {DOMAINS.map((d) => (
+      <AppInput
+        placeholder="Buscar cuestionarios..."
+        value={searchQuery}
+        onChangeText={setSearchQuery}
+        accessibilityLabel="Buscar cuestionarios por título"
+      />
+
+      <View style={{ gap: 12 }}>
+        <AppText variant="title">Categorías</AppText>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ gap: 10 }}
+        >
           <Pressable
-            key={d.key}
-            accessibilityRole="button"
-            accessibilityLabel={`Abrir ${d.title}`}
-            onPress={() => router.push("/quiz/questions" as any)}
-            style={({ pressed }) => [
-              {
-                width: width >= 900 ? "32%" : width >= 520 ? "48%" : "100%",
-                transform: [{ scale: pressed ? 0.985 : 1 }],
-              },
-            ]}
+            onPress={() => setSelectedCategory(null)}
+            style={{
+              paddingHorizontal: 16,
+              paddingVertical: 8,
+              borderRadius: 20,
+              backgroundColor:
+                selectedCategory === null ? primary : surfaceHighest,
+            }}
           >
-            <AppCard tone="low" style={{ gap: 12 }}>
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                }}
-              >
-                <View
-                  style={{
-                    width: 44,
-                    height: 44,
-                    borderRadius: 14,
-                    backgroundColor: `${primary}14`,
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  <MaterialIcons
-                    name={d.icon as any}
-                    size={22}
-                    color={primary}
-                  />
-                </View>
-                <MaterialIcons name="chevron-right" size={22} color={primary} />
-              </View>
-              <View style={{ gap: 4 }}>
-                <AppText variant="title">{d.title}</AppText>
-                <AppText
-                  variant="labelCaps"
-                  colorName="secondary"
-                  style={{ opacity: 0.8 }}
-                >
-                  {d.subtitle}
-                </AppText>
-              </View>
-            </AppCard>
+            <AppText
+              colorName={selectedCategory === null ? "onPrimary" : "primary"}
+            >
+              Todas
+            </AppText>
           </Pressable>
-        ))}
+          {CATEGORIES.map((cat) => (
+            <Pressable
+              key={cat.key}
+              onPress={() => setSelectedCategory(cat.key)}
+              style={{
+                paddingHorizontal: 16,
+                paddingVertical: 8,
+                borderRadius: 20,
+                backgroundColor:
+                  selectedCategory === cat.key ? primary : surfaceHighest,
+              }}
+            >
+              <AppText
+                colorName={
+                  selectedCategory === cat.key ? "onPrimary" : "primary"
+                }
+              >
+                {cat.title}
+              </AppText>
+            </Pressable>
+          ))}
+        </ScrollView>
+      </View>
+
+      <View style={{ gap: 12 }}>
+        <AppText variant="title">Cuestionarios Disponibles</AppText>
+        {filteredQuestionnaires.length === 0 ? (
+          <AppText variant="body" colorName="secondary">
+            No se encontraron cuestionarios.
+          </AppText>
+        ) : (
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 14 }}>
+            {filteredQuestionnaires.map((q) => (
+              <Pressable
+                key={q.id}
+                accessibilityRole="button"
+                accessibilityLabel={`Abrir detalle de ${q.title}`}
+                onPress={() => router.push(`/quiz?id=${q.id}` as any)}
+                style={({ pressed }) => [
+                  {
+                    width: width >= 900 ? "32%" : width >= 520 ? "48%" : "100%",
+                    transform: [{ scale: pressed ? 0.985 : 1 }],
+                  },
+                ]}
+              >
+                <AppCard tone="low" style={{ gap: 12 }}>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                    }}
+                  >
+                    <View
+                      style={{
+                        width: 44,
+                        height: 44,
+                        borderRadius: 14,
+                        backgroundColor: `${primary}14`,
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      <MaterialIcons name="quiz" size={22} color={primary} />
+                    </View>
+                    <MaterialIcons
+                      name="chevron-right"
+                      size={22}
+                      color={primary}
+                    />
+                  </View>
+                  <View style={{ gap: 4 }}>
+                    <AppText variant="title">{q.title}</AppText>
+                    <AppText
+                      variant="labelCaps"
+                      colorName="secondary"
+                      style={{ opacity: 0.8 }}
+                    >
+                      {q.duration}
+                    </AppText>
+                  </View>
+                  <AppText
+                    variant="body"
+                    colorName="secondary"
+                    numberOfLines={2}
+                  >
+                    {q.description}
+                  </AppText>
+                </AppCard>
+              </Pressable>
+            ))}
+          </View>
+        )}
       </View>
     </AppScreen>
   );

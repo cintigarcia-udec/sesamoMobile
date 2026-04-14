@@ -266,6 +266,16 @@ export default function ProfileScreen() {
             >
               Back to Dashboard
             </AppButton>
+            <AppButton
+              onPress={() => router.replace("/auth/login" as any)}
+              variant="secondary"
+              leftIcon={
+                <MaterialIcons name="logout" size={18} color={primary} />
+              }
+              accessibilityLabel="Cerrar sesión"
+            >
+              Logout
+            </AppButton>
           </AppCard>
         </View>
       </View>
