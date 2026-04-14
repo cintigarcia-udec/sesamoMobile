@@ -34,6 +34,13 @@ export default function AdminQuestionnairesScreen() {
 
   const [query, setQuery] = useState("");
 
+  const formatStatus = (status: Questionnaire["status"]) =>
+    status === "Active"
+      ? "Activo"
+      : status === "Draft"
+        ? "Borrador"
+        : "Archivado";
+
   const data = useMemo<Questionnaire[]>(
     () => [
       {
@@ -72,14 +79,14 @@ export default function AdminQuestionnairesScreen() {
   return (
     <AdminShell
       active="questionnaires"
-      title="Admin Console"
+      title="Consola Admin"
       right={
         <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
           <View style={{ display: width >= 520 ? "flex" : "none", width: 240 }}>
             <AppInput
               value={query}
               onChangeText={setQuery}
-              placeholder="Search questionnaires..."
+              placeholder="Buscar cuestionarios..."
               accessibilityLabel="Buscar cuestionarios"
             />
           </View>
@@ -107,22 +114,21 @@ export default function AdminQuestionnairesScreen() {
           colorName="primary"
           style={{ opacity: 0.9 }}
         >
-          Management Hub
+          Centro de Gestión
         </AppText>
         <AppText
           variant="headline"
           style={{ fontSize: width >= 900 ? 48 : 36 }}
         >
-          Questionnaires
+          Cuestionarios
         </AppText>
         <AppText
           variant="body"
           colorName="secondary"
           style={{ opacity: 0.9, maxWidth: 760 }}
         >
-          Orchestrate your educational logic. Manage structural assessments,
-          validation flows, and engineering theory modules from a single
-          authoritative view.
+          Administra tus evaluaciones. Gestiona cuestionarios, preguntas y su
+          estado desde una vista centralizada.
         </AppText>
       </View>
 
@@ -145,7 +151,7 @@ export default function AdminQuestionnairesScreen() {
           <AppInput
             value={query}
             onChangeText={setQuery}
-            placeholder="Filter by title or tag..."
+            placeholder="Filtrar por título o etiqueta..."
             accessibilityLabel="Filtrar por título o tag"
           />
           <View style={{ flexDirection: "row", gap: 10 }}>
@@ -160,7 +166,7 @@ export default function AdminQuestionnairesScreen() {
                 />
               }
             >
-              Filter
+              Filtrar
             </AppButton>
             <AppButton
               variant="tertiary"
@@ -169,7 +175,7 @@ export default function AdminQuestionnairesScreen() {
               }
               leftIcon={<MaterialIcons name="add" size={18} color={primary} />}
             >
-              New
+              Nuevo
             </AppButton>
           </View>
         </AppCard>
@@ -185,6 +191,7 @@ export default function AdminQuestionnairesScreen() {
         >
           <View style={{ padding: 18, backgroundColor: primary }}>
             <View
+              pointerEvents="none"
               style={{
                 position: "absolute",
                 inset: 0,
@@ -206,7 +213,7 @@ export default function AdminQuestionnairesScreen() {
                   variant="labelCaps"
                   style={{ color: "#ffffff", opacity: 0.8 }}
                 >
-                  Total Questions
+                  Total de Preguntas
                 </AppText>
               </View>
               <View style={{ alignItems: "flex-end" }}>
@@ -220,7 +227,7 @@ export default function AdminQuestionnairesScreen() {
                   variant="labelCaps"
                   style={{ color: "#ffffff", opacity: 0.8 }}
                 >
-                  Active Modules
+                  Módulos Activos
                 </AppText>
               </View>
             </View>
@@ -303,7 +310,7 @@ export default function AdminQuestionnairesScreen() {
                   }}
                 >
                   <AppText variant="labelCaps" colorName="primary">
-                    {q.status}
+                    {formatStatus(q.status)}
                   </AppText>
                 </View>
                 <View
@@ -315,7 +322,7 @@ export default function AdminQuestionnairesScreen() {
                   }}
                 >
                   <AppText variant="labelCaps" colorName="secondary">
-                    {q.questions} Q
+                    {q.questions} Preg.
                   </AppText>
                 </View>
                 <MaterialIcons
@@ -329,13 +336,13 @@ export default function AdminQuestionnairesScreen() {
         ))}
         {filtered.length === 0 ? (
           <AppCard tone="low">
-            <AppText variant="bodyStrong">No results</AppText>
+            <AppText variant="bodyStrong">Sin resultados</AppText>
             <AppText
               variant="label"
               colorName="secondary"
               style={{ opacity: 0.85, marginTop: 6 }}
             >
-              Adjust your filters or search query.
+              Ajusta los filtros o el texto de búsqueda.
             </AppText>
           </AppCard>
         ) : null}
