@@ -1,5 +1,7 @@
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { useRouter } from "expo-router";
+import * as SecureStore from "expo-secure-store";
+import { useState } from "react";
 import { Pressable, View, useWindowDimensions } from "react-native";
 
 import { AppButton } from "@/components/design/app-button";
@@ -19,6 +21,7 @@ const ACCOUNT_ACTIONS = [
 export default function ProfileScreen() {
   const router = useRouter();
   const { width } = useWindowDimensions();
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const primary = useThemeColor({}, "primary");
   const secondary = useThemeColor({}, "secondary");
@@ -26,7 +29,81 @@ export default function ProfileScreen() {
   const surfaceLowest = useThemeColor({}, "surfaceContainerLowest");
   const primaryContainer = useThemeColor({}, "primaryContainer");
 
+  const API_BASE_URL = (
+    process.env.EXPO_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000/api/v1"
+  ).replace(/\/+$/, "");
+  const ACCESS_TOKEN_KEY = "sesamo.access_token";
+
   const isWide = width >= 900;
+
+  const clearStoredToken = async () => {
+    delete (globalThis as any).__SESAMO_ACCESS_TOKEN__;
+    delete (globalThis as any).__SESAMO_JWT_PAYLOAD__;
+
+    if (process.env.EXPO_OS === "web") {
+      try {
+        (globalThis as any).localStorage?.removeItem(ACCESS_TOKEN_KEY);
+      } catch {
+        return;
+      }
+      return;
+    }
+
+    try {
+      const available = await SecureStore.isAvailableAsync();
+      if (!available) return;
+      await SecureStore.deleteItemAsync(ACCESS_TOKEN_KEY);
+    } catch {
+      return;
+    }
+  };
+
+  const getStoredToken = async () => {
+    const inMemory = (globalThis as any).__SESAMO_ACCESS_TOKEN__ as
+      | string
+      | undefined;
+    if (inMemory) return inMemory;
+
+    if (process.env.EXPO_OS === "web") {
+      try {
+        const stored = (globalThis as any).localStorage?.getItem(
+          ACCESS_TOKEN_KEY,
+        ) as string | null | undefined;
+        return stored ?? null;
+      } catch {
+        return null;
+      }
+    }
+
+    try {
+      const available = await SecureStore.isAvailableAsync();
+      if (!available) return null;
+      return await SecureStore.getItemAsync(ACCESS_TOKEN_KEY);
+    } catch {
+      return null;
+    }
+  };
+
+  const handleLogout = async () => {
+    if (isLoggingOut) return;
+    setIsLoggingOut(true);
+
+    try {
+      const token = await getStoredToken();
+      if (token) {
+        await fetch(`${API_BASE_URL}/auth/logout`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+      }
+    } finally {
+      await clearStoredToken();
+      router.replace("/auth/login" as any);
+      setIsLoggingOut(false);
+    }
+  };
 
   return (
     <AppScreen
@@ -252,14 +329,6 @@ export default function ProfileScreen() {
               Quick Actions
             </AppText>
             <AppButton
-              onPress={() => router.push("/admin" as any)}
-              leftIcon={
-                <MaterialIcons name="dashboard" size={18} color="#ffffff" />
-              }
-            >
-              Open Admin Console
-            </AppButton>
-            <AppButton
               onPress={() => router.push("/(tabs)" as any)}
               variant="secondary"
               leftIcon={<MaterialIcons name="home" size={18} color={primary} />}
@@ -267,12 +336,13 @@ export default function ProfileScreen() {
               Back to Dashboard
             </AppButton>
             <AppButton
-              onPress={() => router.replace("/auth/login" as any)}
+              onPress={handleLogout}
               variant="secondary"
               leftIcon={
                 <MaterialIcons name="logout" size={18} color={primary} />
               }
               accessibilityLabel="Cerrar sesión"
+              disabled={isLoggingOut}
             >
               Logout
             </AppButton>
