@@ -3,6 +3,7 @@ import { useRouter } from "expo-router";
 import { ReactNode, useMemo, useState } from "react";
 import { Modal, Pressable, ScrollView, View, useWindowDimensions } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import * as SecureStore from "expo-secure-store";
 
 import { AppCard } from "@/components/design/app-card";
 import { AppText } from "@/components/design/app-text";
@@ -33,6 +34,7 @@ export function AdminShell({
   const router = useRouter();
   const { width } = useWindowDimensions();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const insets = useSafeAreaInsets();
 
   const primary = useThemeColor({}, "primary");
@@ -41,7 +43,81 @@ export function AdminShell({
   const surfaceLow = useThemeColor({}, "surfaceContainerLow");
   const surfaceHighest = useThemeColor({}, "surfaceContainerHighest");
 
+  const API_BASE_URL = (
+    process.env.EXPO_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000/api/v1"
+  ).replace(/\/+$/, "");
+  const ACCESS_TOKEN_KEY = "sesamo.access_token";
+
   const isWide = width >= 900;
+
+  const clearStoredToken = async () => {
+    delete (globalThis as any).__SESAMO_ACCESS_TOKEN__;
+    delete (globalThis as any).__SESAMO_JWT_PAYLOAD__;
+
+    if (process.env.EXPO_OS === "web") {
+      try {
+        (globalThis as any).localStorage?.removeItem(ACCESS_TOKEN_KEY);
+      } catch {
+        return;
+      }
+      return;
+    }
+
+    try {
+      const available = await SecureStore.isAvailableAsync();
+      if (!available) return;
+      await SecureStore.deleteItemAsync(ACCESS_TOKEN_KEY);
+    } catch {
+      return;
+    }
+  };
+
+  const getStoredToken = async () => {
+    const inMemory = (globalThis as any).__SESAMO_ACCESS_TOKEN__ as
+      | string
+      | undefined;
+    if (inMemory) return inMemory;
+
+    if (process.env.EXPO_OS === "web") {
+      try {
+        const stored = (globalThis as any).localStorage?.getItem(
+          ACCESS_TOKEN_KEY
+        ) as string | null | undefined;
+        return stored ?? null;
+      } catch {
+        return null;
+      }
+    }
+
+    try {
+      const available = await SecureStore.isAvailableAsync();
+      if (!available) return null;
+      return await SecureStore.getItemAsync(ACCESS_TOKEN_KEY);
+    } catch {
+      return null;
+    }
+  };
+
+  const handleLogout = async () => {
+    if (isLoggingOut) return;
+    setIsLoggingOut(true);
+
+    try {
+      const token = await getStoredToken();
+      if (token) {
+        await fetch(`${API_BASE_URL}/auth/logout`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+      }
+    } finally {
+      await clearStoredToken();
+      router.replace("/auth/login" as any);
+      setIsLoggingOut(false);
+    }
+  };
 
   const items = useMemo(
     () => [
@@ -194,7 +270,27 @@ export function AdminShell({
             </Pressable>
           )
         }
-        right={right}
+        right={
+          <>
+            {right}
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Cerrar sesión"
+              accessibilityState={{ disabled: isLoggingOut }}
+              onPress={handleLogout}
+              style={({ pressed }) => [
+                {
+                  padding: 8,
+                  borderRadius: 999,
+                  backgroundColor: pressed ? surfaceHighest : "transparent",
+                  opacity: isLoggingOut ? 0.6 : 1,
+                },
+              ]}
+            >
+              <MaterialIcons name="logout" size={22} color={primary} />
+            </Pressable>
+          </>
+        }
       />
 
       <View style={{ flex: 1, flexDirection: isWide ? "row" : "column" }}>
