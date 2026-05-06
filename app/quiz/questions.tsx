@@ -1,5 +1,5 @@
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -15,10 +15,18 @@ import { AppScreen } from "@/components/design/app-screen";
 import { AppText } from "@/components/design/app-text";
 import { CodeBlock } from "@/components/design/code-block";
 import { TopAppBar } from "@/components/design/top-app-bar";
+import {
+  ApiError,
+  api,
+  getJwtUserId,
+  getStoredAccessToken,
+  type AnswerOption,
+  type Question as ApiQuestion,
+} from "@/constants/api";
 import { useThemeColor } from "@/hooks/use-theme-color";
 
-type Question = {
-  id: string;
+type QuizQuestion = {
+  id: number;
   title: string;
   contextLabel: string;
   code: string;
@@ -38,6 +46,7 @@ function formatTime(totalSeconds: number) {
 
 export default function QuizQuestionsScreen() {
   const router = useRouter();
+  const { quizId } = useLocalSearchParams<{ quizId?: string }>();
   const { width } = useWindowDimensions();
 
   const primary = useThemeColor({}, "primary");
@@ -47,72 +56,131 @@ export default function QuizQuestionsScreen() {
   const surfaceLowest = useThemeColor({}, "surfaceContainerLowest");
   const outlineVariant = useThemeColor({}, "outlineVariant");
 
-  const mockQuestions = useMemo<Question[]>(
-    () => [
-      {
-        id: "bst-search",
-        title:
-          "What is the average-case time complexity for searching an element in a balanced binary search tree (BST)?",
-        contextLabel: "Technical Context",
-        code: `function search(node, target) {\n  if (!node) return null;\n  if (node.val === target) return node;\n  return target < node.val\n    ? search(node.left, target)\n    : search(node.right, target);\n}`,
-        options: [
-          { key: "A", title: "O(1)", subtitle: "Constant Time" },
-          {
-            key: "B",
-            title: "O(log n)",
-            subtitle: "Logarithmic Time",
-            correct: true,
-          },
-          { key: "C", title: "O(n)", subtitle: "Linear Time" },
-          { key: "D", title: "O(n log n)", subtitle: "Linearithmic Time" },
-        ],
-      },
-      {
-        id: "hash-lookup",
-        title:
-          "In a well-implemented hash table, what is the expected time complexity for a successful lookup?",
-        contextLabel: "Technical Context",
-        code: `const index = hash(key) % buckets.length;\nfor (const entry of buckets[index]) {\n  if (entry.key === key) return entry.value;\n}\nreturn null;`,
-        options: [
-          {
-            key: "A",
-            title: "O(1)",
-            subtitle: "Amortized Constant",
-            correct: true,
-          },
-          { key: "B", title: "O(log n)", subtitle: "Logarithmic" },
-          { key: "C", title: "O(n)", subtitle: "Worst-case" },
-          { key: "D", title: "O(n log n)", subtitle: "Sorting bound" },
-        ],
-      },
-    ],
-    [],
-  );
+  const questionnaireId = useMemo(() => {
+    const num = typeof quizId === "string" ? Number(quizId) : NaN;
+    return Number.isFinite(num) ? num : null;
+  }, [quizId]);
 
-  const questions = mockQuestions;
+  const [questions, setQuestions] = useState<QuizQuestion[]>([]);
   const total = questions.length;
   const [index, setIndex] = useState(0);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [correctCount, setCorrectCount] = useState(0);
   const [secondsLeft, setSecondsLeft] = useState(15 * 60);
+  const [loadError, setLoadError] = useState("");
+  const [answersByQuestionId, setAnswersByQuestionId] = useState<
+    Record<number, string>
+  >({});
 
   const [isLoadingQuestions, setIsLoadingQuestions] = useState(true);
   const [isLoadingOptions, setIsLoadingOptions] = useState(true);
 
   useEffect(() => {
-    const id = setTimeout(() => setIsLoadingQuestions(false), 600);
-    return () => clearTimeout(id);
-  }, []);
+    let cancelled = false;
 
-  useEffect(() => {
-    if (isLoadingQuestions) return;
-    setIsLoadingOptions(true);
-    const id = setTimeout(() => setIsLoadingOptions(false), 450);
-    return () => clearTimeout(id);
-  }, [index, isLoadingQuestions]);
+    const fetchAll = async <T,>(
+      fetchPage: (args: { skip: number; limit: number }) => Promise<T[]>,
+      limit: number,
+      max: number,
+    ) => {
+      const out: T[] = [];
+      for (let skip = 0; skip < max; skip += limit) {
+        const page = await fetchPage({ skip, limit });
+        out.push(...page);
+        if (page.length < limit) break;
+      }
+      return out;
+    };
 
-  const q = questions[index] ?? questions[0]!;
-  const progress = (index + 1) / total;
+    const buildQuizQuestions = (qs: ApiQuestion[], options: AnswerOption[]) => {
+      const optionsByQuestionId = new Map<number, AnswerOption[]>();
+      for (const opt of options) {
+        const prev = optionsByQuestionId.get(opt.question_id) ?? [];
+        prev.push(opt);
+        optionsByQuestionId.set(opt.question_id, prev);
+      }
+
+      return qs.map<QuizQuestion>((q) => {
+        const opts = (optionsByQuestionId.get(q.id) ?? [])
+          .slice()
+          .sort((a, b) => a.option_key.localeCompare(b.option_key));
+        return {
+          id: q.id,
+          title: q.question_text,
+          contextLabel: "Pregunta",
+          code: "",
+          options: opts.map((o) => ({
+            key: o.option_key,
+            title: o.answer,
+            subtitle: "",
+            correct: o.is_correct ?? undefined,
+          })),
+        };
+      });
+    };
+
+    const run = async () => {
+      setIsLoadingQuestions(true);
+      setIsLoadingOptions(true);
+      setLoadError("");
+      setIndex(0);
+      setSelectedKey(null);
+      setCorrectCount(0);
+      setAnswersByQuestionId({});
+
+      if (!questionnaireId) {
+        setLoadError("Id de cuestionario inválido.");
+        setIsLoadingQuestions(false);
+        setIsLoadingOptions(false);
+        return;
+      }
+
+      try {
+        const [allQuestions, allOptions] = await Promise.all([
+          fetchAll((args) => api.questions.list(args), 250, 2000),
+          fetchAll((args) => api.answerOptions.list(args), 500, 5000),
+        ]);
+
+        const filteredQuestions = allQuestions.filter(
+          (q) => q.questionnaire_id === questionnaireId,
+        );
+        const questionIds = new Set(filteredQuestions.map((q) => q.id));
+        const filteredOptions = allOptions.filter((o) =>
+          questionIds.has(o.question_id),
+        );
+
+        const built = buildQuizQuestions(filteredQuestions, filteredOptions);
+
+        if (cancelled) return;
+        setQuestions(built);
+        if (built.length === 0) {
+          setLoadError(
+            "No hay preguntas disponibles para este cuestionario. (Actualmente la API no expone filtros por questionnaire_id para /questions/).",
+          );
+        }
+      } catch (err) {
+        if (cancelled) return;
+        setLoadError(
+          err instanceof ApiError
+            ? err.message
+            : "No se pudieron cargar las preguntas. Intenta nuevamente.",
+        );
+      } finally {
+        if (!cancelled) {
+          setIsLoadingQuestions(false);
+          setIsLoadingOptions(false);
+        }
+      }
+    };
+
+    run();
+    return () => {
+      cancelled = true;
+    };
+  }, [questionnaireId]);
+
+  const q = questions[index] ?? questions[0];
+  const progress = total > 0 ? (index + 1) / total : 0;
 
   useEffect(() => {
     const id = setInterval(() => {
@@ -138,35 +206,77 @@ export default function QuizQuestionsScreen() {
   const isWide = width >= 900;
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const submit = () => {
-    if (!selectedKey || isSubmitting || isLoadingQuestions || isLoadingOptions)
+  const submit = async () => {
+    if (
+      !selectedKey ||
+      isSubmitting ||
+      isLoadingQuestions ||
+      isLoadingOptions ||
+      !q
+    ) {
       return;
+    }
     setIsSubmitting(true);
 
-    setTimeout(() => {
-      const isCorrect =
-        q.options.find((o) => o.key === selectedKey)?.correct === true;
-      const nextCorrectCount = correctCount + (isCorrect ? 1 : 0);
-      setCorrectCount(nextCorrectCount);
-      setSelectedKey(null);
-      setIsSubmitting(false);
+    const isCorrect =
+      q.options.find((o) => o.key === selectedKey)?.correct === true;
+    const nextCorrectCount = correctCount + (isCorrect ? 1 : 0);
+    const isLast = index + 1 >= total;
 
-      if (index + 1 >= total) {
-        const score = Math.round((nextCorrectCount / total) * 100);
-        router.replace({
-          pathname: "/quiz/results" as any,
-          params: {
-            score: String(score),
-            correct: String(nextCorrectCount),
-            total: String(total),
-            time: formatTime(15 * 60 - secondsLeft),
-          },
-        });
-        return;
+    setAnswersByQuestionId((prev) => ({ ...prev, [q.id]: selectedKey }));
+    setCorrectCount(nextCorrectCount);
+    setSelectedKey(null);
+
+    if (isLast) {
+      const score =
+        total > 0 ? Math.round((nextCorrectCount / total) * 100) : 0;
+      const timeSpent = formatTime(15 * 60 - secondsLeft);
+
+      let submitError = "";
+      try {
+        const token = await getStoredAccessToken();
+        const userId = token ? getJwtUserId(token) : null;
+        if (!userId) {
+          submitError =
+            "No se pudo determinar el usuario actual desde el JWT (falta user_id/sub).";
+        } else if (!questionnaireId) {
+          submitError = "Id de cuestionario inválido.";
+        } else {
+          const payload = {
+            user_id: userId,
+            questionnaire_id: questionnaireId,
+            score,
+            answers: JSON.stringify(
+              { ...answersByQuestionId, [q.id]: selectedKey },
+              null,
+              0,
+            ),
+          };
+          await api.userResponses.create(payload);
+        }
+      } catch (err) {
+        submitError =
+          err instanceof ApiError
+            ? err.message
+            : "No se pudo enviar el resultado.";
       }
 
-      setIndex((i) => i + 1);
-    }, 800);
+      router.replace({
+        pathname: "/quiz/results" as any,
+        params: {
+          score: String(score),
+          correct: String(nextCorrectCount),
+          total: String(total),
+          time: timeSpent,
+          submitError,
+        },
+      });
+      setIsSubmitting(false);
+      return;
+    }
+
+    setIndex((i) => i + 1);
+    setIsSubmitting(false);
   };
 
   const isLastQuestion = index + 1 >= total;
@@ -350,6 +460,28 @@ export default function QuizQuestionsScreen() {
                 />
               </View>
             </AppCard>
+          ) : loadError || !q ? (
+            <AppCard tone="low" style={{ padding: 22, gap: 10 }}>
+              <AppText variant="bodyStrong">
+                No se pudo cargar el cuestionario
+              </AppText>
+              <AppText variant="body" colorName="secondary">
+                {loadError || "No hay preguntas disponibles."}
+              </AppText>
+              <AppButton
+                variant="secondary"
+                onPress={() => router.back()}
+                leftIcon={
+                  <MaterialIcons
+                    name="arrow-back"
+                    size={18}
+                    color={secondary}
+                  />
+                }
+              >
+                Volver
+              </AppButton>
+            </AppCard>
           ) : (
             <View style={{ flexDirection: isWide ? "row" : "column", gap: 16 }}>
               <View style={{ flex: isWide ? 7 : undefined, gap: 12 }}>
@@ -378,7 +510,7 @@ export default function QuizQuestionsScreen() {
                     >
                       {q.contextLabel}
                     </AppText>
-                    <CodeBlock>{q.code}</CodeBlock>
+                    {q.code ? <CodeBlock>{q.code}</CodeBlock> : null}
                   </View>
                 </AppCard>
               </View>
