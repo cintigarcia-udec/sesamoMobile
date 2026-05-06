@@ -1,7 +1,6 @@
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { useRouter } from "expo-router";
-import * as SecureStore from "expo-secure-store";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Pressable, View, useWindowDimensions } from "react-native";
 
 import { AppButton } from "@/components/design/app-button";
@@ -9,6 +8,15 @@ import { AppCard } from "@/components/design/app-card";
 import { AppScreen } from "@/components/design/app-screen";
 import { AppText } from "@/components/design/app-text";
 import { TopAppBar } from "@/components/design/top-app-bar";
+import {
+  ApiError,
+  api,
+  clearStoredAccessToken,
+  clearStoredRefreshToken,
+  getJwtUserId,
+  getStoredAccessToken,
+  type User,
+} from "@/constants/api";
 import { useThemeColor } from "@/hooks/use-theme-color";
 
 const ACCOUNT_ACTIONS = [
@@ -29,77 +37,63 @@ export default function ProfileScreen() {
   const surfaceLowest = useThemeColor({}, "surfaceContainerLowest");
   const primaryContainer = useThemeColor({}, "primaryContainer");
 
-  const API_BASE_URL = (
-    process.env.EXPO_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000/api/v1"
-  ).replace(/\/+$/, "");
-  const ACCESS_TOKEN_KEY = "sesamo.access_token";
-
   const isWide = width >= 900;
+  const [user, setUser] = useState<User | null>(null);
+  const [schoolName, setSchoolName] = useState("");
+  const [isLoadingProfile, setIsLoadingProfile] = useState(true);
+  const [profileError, setProfileError] = useState("");
 
-  const clearStoredToken = async () => {
-    delete (globalThis as any).__SESAMO_ACCESS_TOKEN__;
-    delete (globalThis as any).__SESAMO_JWT_PAYLOAD__;
-
-    if (process.env.EXPO_OS === "web") {
+  useEffect(() => {
+    let cancelled = false;
+    const run = async () => {
+      setIsLoadingProfile(true);
+      setProfileError("");
       try {
-        (globalThis as any).localStorage?.removeItem(ACCESS_TOKEN_KEY);
-      } catch {
-        return;
+        const token = await getStoredAccessToken();
+        const userId = token ? getJwtUserId(token) : null;
+        if (!userId) {
+          setProfileError(
+            "No se pudo determinar el usuario actual desde el JWT.",
+          );
+          return;
+        }
+        const u = await api.users.get(userId);
+        let school = "";
+        try {
+          const s = await api.schools.get(u.school_id);
+          school = s.name;
+        } catch {
+          school = "";
+        }
+        if (cancelled) return;
+        setUser(u);
+        setSchoolName(school);
+      } catch (err) {
+        if (cancelled) return;
+        setProfileError(
+          err instanceof ApiError
+            ? err.message
+            : "No se pudo cargar el perfil.",
+        );
+      } finally {
+        if (!cancelled) setIsLoadingProfile(false);
       }
-      return;
-    }
-
-    try {
-      const available = await SecureStore.isAvailableAsync();
-      if (!available) return;
-      await SecureStore.deleteItemAsync(ACCESS_TOKEN_KEY);
-    } catch {
-      return;
-    }
-  };
-
-  const getStoredToken = async () => {
-    const inMemory = (globalThis as any).__SESAMO_ACCESS_TOKEN__ as
-      | string
-      | undefined;
-    if (inMemory) return inMemory;
-
-    if (process.env.EXPO_OS === "web") {
-      try {
-        const stored = (globalThis as any).localStorage?.getItem(
-          ACCESS_TOKEN_KEY,
-        ) as string | null | undefined;
-        return stored ?? null;
-      } catch {
-        return null;
-      }
-    }
-
-    try {
-      const available = await SecureStore.isAvailableAsync();
-      if (!available) return null;
-      return await SecureStore.getItemAsync(ACCESS_TOKEN_KEY);
-    } catch {
-      return null;
-    }
-  };
+    };
+    run();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const handleLogout = async () => {
     if (isLoggingOut) return;
     setIsLoggingOut(true);
 
     try {
-      const token = await getStoredToken();
-      if (token) {
-        await fetch(`${API_BASE_URL}/auth/logout`, {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-      }
+      await api.auth.logout().catch(() => undefined);
     } finally {
-      await clearStoredToken();
+      await clearStoredAccessToken();
+      await clearStoredRefreshToken();
       router.replace("/auth/login" as any);
       setIsLoggingOut(false);
     }
@@ -226,7 +220,15 @@ export default function ProfileScreen() {
               >
                 Full Name
               </AppText>
-              <AppText variant="bodyStrong">Alex Rivera Montoya</AppText>
+              <AppText variant="bodyStrong">
+                {isLoadingProfile
+                  ? "Cargando..."
+                  : profileError
+                    ? profileError
+                    : user
+                      ? `${user.name} ${user.last_name}`
+                      : "—"}
+              </AppText>
             </View>
             <View style={{ gap: 2 }}>
               <AppText
@@ -236,7 +238,9 @@ export default function ProfileScreen() {
               >
                 Email Address
               </AppText>
-              <AppText variant="bodyStrong">a.rivera@polytechnic.edu</AppText>
+              <AppText variant="bodyStrong">
+                {isLoadingProfile ? "Cargando..." : (user?.email ?? "—")}
+              </AppText>
             </View>
             <View style={{ gap: 2 }}>
               <AppText
@@ -246,7 +250,11 @@ export default function ProfileScreen() {
               >
                 Institution
               </AppText>
-              <AppText variant="bodyStrong">MIT School of Engineering</AppText>
+              <AppText variant="bodyStrong">
+                {isLoadingProfile
+                  ? "Cargando..."
+                  : schoolName || `school_id: ${user?.school_id ?? "—"}`}
+              </AppText>
             </View>
           </AppCard>
 
