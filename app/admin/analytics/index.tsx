@@ -1,6 +1,6 @@
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
-import { useMemo, useState } from "react";
-import { View, useWindowDimensions } from "react-native";
+import { useEffect, useState } from "react";
+import { ActivityIndicator, View, useWindowDimensions } from "react-native";
 import Svg, { Rect } from "react-native-svg";
 
 import { AdminShell } from "@/components/admin/admin-shell";
@@ -8,6 +8,13 @@ import { AppButton } from "@/components/design/app-button";
 import { AppCard } from "@/components/design/app-card";
 import { AppInput } from "@/components/design/app-input";
 import { AppText } from "@/components/design/app-text";
+import {
+  ApiError,
+  api,
+  type School,
+  type User,
+  type UserResponse,
+} from "@/constants/api";
 import { useThemeColor } from "@/hooks/use-theme-color";
 
 type Bar = { label: string; value: number };
@@ -64,16 +71,87 @@ export default function AdminAnalyticsScreen() {
   const [component, setComponent] = useState("Global Architecture");
   const [date, setDate] = useState("");
 
-  const bars = useMemo<Bar[]>(
-    () => [
-      { label: "San Jose", value: 74 },
-      { label: "Liceo", value: 68 },
-      { label: "Arts", value: 58 },
-      { label: "Tech", value: 84 },
-      { label: "Poly", value: 77 },
-    ],
-    [],
-  );
+  const [bars, setBars] = useState<Bar[]>([]);
+  const [avgScore, setAvgScore] = useState<number | null>(null);
+  const [totalUsers, setTotalUsers] = useState<number | null>(null);
+  const [topSchool, setTopSchool] = useState<string>("");
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    const run = async () => {
+      setIsLoading(true);
+      setError("");
+      try {
+        const [schools, users, responses] = await Promise.all([
+          api.schools.list({ skip: 0, limit: 500 }),
+          api.users.list({ skip: 0, limit: 5000 }),
+          api.userResponses.list({ skip: 0, limit: 5000 }),
+        ]);
+
+        const userById = new Map<number, User>();
+        for (const u of users) userById.set(u.id, u);
+
+        const schoolById = new Map<number, School>();
+        for (const s of schools) schoolById.set(s.id, s);
+
+        const bySchool = new Map<number, UserResponse[]>();
+        for (const r of responses) {
+          const u = userById.get(r.user_id);
+          if (!u) continue;
+          const prev = bySchool.get(u.school_id) ?? [];
+          prev.push(r);
+          bySchool.set(u.school_id, prev);
+        }
+
+        const overallAvg =
+          responses.reduce(
+            (acc, it) => acc + (Number.isFinite(it.score) ? it.score : 0),
+            0,
+          ) / Math.max(1, responses.length);
+
+        const schoolStats = Array.from(bySchool.entries()).map(
+          ([schoolId, rs]) => {
+            const avg =
+              rs.reduce(
+                (acc, it) => acc + (Number.isFinite(it.score) ? it.score : 0),
+                0,
+              ) / Math.max(1, rs.length);
+            const label =
+              schoolById.get(schoolId)?.name ?? `School ${schoolId}`;
+            return { schoolId, label, avg, count: rs.length };
+          },
+        );
+
+        schoolStats.sort((a, b) => b.avg - a.avg || b.count - a.count);
+        const top = schoolStats[0]?.label ?? "";
+        const chart = schoolStats
+          .slice(0, 8)
+          .map((s) => ({ label: s.label, value: Math.round(s.avg) }));
+
+        if (cancelled) return;
+        setAvgScore(Number.isFinite(overallAvg) ? overallAvg : 0);
+        setTotalUsers(users.length);
+        setTopSchool(top);
+        setBars(chart.length ? chart : [{ label: "Sin datos", value: 0 }]);
+      } catch (err) {
+        if (cancelled) return;
+        setError(
+          err instanceof ApiError
+            ? err.message
+            : "No se pudo cargar analytics.",
+        );
+        setBars([{ label: "Sin datos", value: 0 }]);
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    };
+    run();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const isWide = width >= 900;
 
@@ -145,7 +223,7 @@ export default function AdminAnalyticsScreen() {
                 variant="display"
                 style={{ color: onPrimary, fontSize: 54, lineHeight: 58 }}
               >
-                84.2%
+                {avgScore === null ? "—" : `${avgScore.toFixed(1)}%`}
               </AppText>
             </View>
             <View>
@@ -159,10 +237,35 @@ export default function AdminAnalyticsScreen() {
                 variant="display"
                 style={{ color: onPrimary, fontSize: 54, lineHeight: 58 }}
               >
-                1,248
+                {totalUsers === null ? "—" : totalUsers.toLocaleString()}
               </AppText>
             </View>
           </View>
+          {isLoading ? (
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 10,
+                marginTop: 16,
+              }}
+            >
+              <ActivityIndicator color={onPrimary} />
+              <AppText
+                variant="body"
+                style={{ color: onPrimary, opacity: 0.85 }}
+              >
+                Cargando...
+              </AppText>
+            </View>
+          ) : error ? (
+            <AppText
+              variant="body"
+              style={{ color: onPrimary, opacity: 0.85, marginTop: 16 }}
+            >
+              {error}
+            </AppText>
+          ) : null}
         </View>
 
         <View style={{ flex: isWide ? 4 : undefined, gap: 14 }}>
@@ -196,7 +299,7 @@ export default function AdminAnalyticsScreen() {
               colorName="onSurface"
               style={{ fontSize: 28 }}
             >
-              Inst. Tecnológico
+              {topSchool || "—"}
             </AppText>
           </AppCard>
         </View>
