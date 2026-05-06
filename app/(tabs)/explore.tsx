@@ -1,45 +1,21 @@
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { useRouter } from "expo-router";
-import { useState } from "react";
-import { Pressable, ScrollView, View, useWindowDimensions } from "react-native";
+import { useEffect, useMemo, useState } from "react";
+import {
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  View,
+  useWindowDimensions,
+} from "react-native";
 
 import { AppCard } from "@/components/design/app-card";
 import { AppInput } from "@/components/design/app-input";
 import { AppScreen } from "@/components/design/app-screen";
 import { AppText } from "@/components/design/app-text";
 import { TopAppBar } from "@/components/design/top-app-bar";
+import { ApiError, api, type Category, type Questionnaire } from "@/constants/api";
 import { useThemeColor } from "@/hooks/use-theme-color";
-
-const CATEGORIES = [
-  {
-    key: "cat-1",
-    title: "Logic Systems",
-    icon: "account-tree",
-  },
-  {
-    key: "cat-2",
-    title: "Math for Systems",
-    icon: "functions",
-  },
-];
-
-const QUESTIONNAIRES = [
-  {
-    id: "q-1",
-    categoryId: "cat-1",
-    title: "Algorithms & Complexity",
-    description:
-      "Test your knowledge on Big O notation and sorting algorithms.",
-    duration: "15 min",
-  },
-  {
-    id: "q-2",
-    categoryId: "cat-2",
-    title: "Discrete Mathematics",
-    description: "Graphs, logic and proofs.",
-    duration: "20 min",
-  },
-];
 
 export default function ExploreScreen() {
   const router = useRouter();
@@ -47,17 +23,71 @@ export default function ExploreScreen() {
   const primary = useThemeColor({}, "primary");
   const surfaceHighest = useThemeColor({}, "surfaceContainerHighest");
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<number | null>(null);
 
-  const filteredQuestionnaires = QUESTIONNAIRES.filter((q) => {
-    const matchesSearch = q.title
-      .toLowerCase()
-      .includes(searchQuery.toLowerCase());
-    const matchesCategory = selectedCategory
-      ? q.categoryId === selectedCategory
-      : true;
-    return matchesSearch && matchesCategory;
-  });
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [questionnaires, setQuestionnaires] = useState<Questionnaire[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    const run = async () => {
+      setIsLoading(true);
+      setError("");
+      try {
+        const [cats, qs] = await Promise.all([
+          api.categories.list({ skip: 0, limit: 200 }),
+          api.questionnaires.list({ skip: 0, limit: 500 }),
+        ]);
+        if (cancelled) return;
+        setCategories(cats);
+        setQuestionnaires(qs);
+      } catch (err) {
+        if (cancelled) return;
+        setError(
+          err instanceof ApiError
+            ? err.message
+            : "No se pudieron cargar los datos. Intenta nuevamente.",
+        );
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    };
+    run();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const categoryById = useMemo(() => {
+    const map = new Map<number, Category>();
+    for (const c of categories) map.set(c.id, c);
+    return map;
+  }, [categories]);
+
+  const cards = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    return questionnaires
+      .filter((it) => (selectedCategory ? it.category_id === selectedCategory : true))
+      .filter((it) => {
+        if (!q) return true;
+        const categoryName =
+          (it.category_name ?? categoryById.get(it.category_id)?.name ?? "").toLowerCase();
+        const title = `Cuestionario #${it.questionnaire_number}`.toLowerCase();
+        return `${title} ${categoryName}`.includes(q);
+      })
+      .map((it) => {
+        const categoryName = it.category_name ?? categoryById.get(it.category_id)?.name ?? "";
+        return {
+          id: it.id,
+          categoryId: it.category_id,
+          title: `Cuestionario #${it.questionnaire_number}`,
+          description: categoryName ? `Categoría: ${categoryName}` : "Categoría no disponible",
+          duration: "—",
+        };
+      });
+  }, [questionnaires, selectedCategory, searchQuery, categoryById]);
 
   return (
     <AppScreen
@@ -137,24 +167,24 @@ export default function ExploreScreen() {
               Todas
             </AppText>
           </Pressable>
-          {CATEGORIES.map((cat) => (
+          {categories.map((cat) => (
             <Pressable
-              key={cat.key}
-              onPress={() => setSelectedCategory(cat.key)}
+              key={cat.id}
+              onPress={() => setSelectedCategory(cat.id)}
               style={{
                 paddingHorizontal: 16,
                 paddingVertical: 8,
                 borderRadius: 20,
                 backgroundColor:
-                  selectedCategory === cat.key ? primary : surfaceHighest,
+                  selectedCategory === cat.id ? primary : surfaceHighest,
               }}
             >
               <AppText
                 colorName={
-                  selectedCategory === cat.key ? "onPrimary" : "primary"
+                  selectedCategory === cat.id ? "onPrimary" : "primary"
                 }
               >
-                {cat.title}
+                {cat.name}
               </AppText>
             </Pressable>
           ))}
@@ -163,13 +193,24 @@ export default function ExploreScreen() {
 
       <View style={{ gap: 12 }}>
         <AppText variant="title">Cuestionarios Disponibles</AppText>
-        {filteredQuestionnaires.length === 0 ? (
+        {isLoading ? (
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+            <ActivityIndicator color={primary} />
+            <AppText variant="body" colorName="secondary">
+              Cargando cuestionarios...
+            </AppText>
+          </View>
+        ) : error ? (
+          <AppText variant="body" colorName="secondary">
+            {error}
+          </AppText>
+        ) : cards.length === 0 ? (
           <AppText variant="body" colorName="secondary">
             No se encontraron cuestionarios.
           </AppText>
         ) : (
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 14 }}>
-            {filteredQuestionnaires.map((q) => (
+            {cards.map((q) => (
               <Pressable
                 key={q.id}
                 accessibilityRole="button"
