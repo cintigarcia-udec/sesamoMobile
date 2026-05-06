@@ -1,7 +1,12 @@
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { useRouter } from "expo-router";
-import { useMemo } from "react";
-import { Pressable, View, useWindowDimensions } from "react-native";
+import { useEffect, useMemo, useState } from "react";
+import {
+  ActivityIndicator,
+  Pressable,
+  View,
+  useWindowDimensions,
+} from "react-native";
 
 import { AppButton } from "@/components/design/app-button";
 import { AppCard } from "@/components/design/app-card";
@@ -9,6 +14,12 @@ import { AppScreen } from "@/components/design/app-screen";
 import { AppText } from "@/components/design/app-text";
 import { ProgressRing } from "@/components/design/progress-ring";
 import { TopAppBar } from "@/components/design/top-app-bar";
+import {
+  ApiError,
+  api,
+  getJwtUserId,
+  getStoredAccessToken,
+} from "@/constants/api";
 import { useThemeColor } from "@/hooks/use-theme-color";
 
 export default function DashboardScreen() {
@@ -21,6 +32,51 @@ export default function DashboardScreen() {
   const errorContainer = useThemeColor({}, "errorContainer");
   const onErrorContainer = useThemeColor({}, "onErrorContainer");
   const error = useThemeColor({}, "error");
+
+  const [avgScore, setAvgScore] = useState<number | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    const run = async () => {
+      setIsLoading(true);
+      setLoadError("");
+      try {
+        const token = await getStoredAccessToken();
+        const userId = token ? getJwtUserId(token) : null;
+        if (!userId) {
+          setLoadError("No se pudo determinar el usuario actual desde el JWT.");
+          return;
+        }
+        const responses = await api.userResponses.list({
+          skip: 0,
+          limit: 2000,
+        });
+        const mine = responses.filter((r) => r.user_id === userId);
+        const overallAvg =
+          mine.reduce(
+            (acc, it) => acc + (Number.isFinite(it.score) ? it.score : 0),
+            0,
+          ) / Math.max(1, mine.length);
+        if (cancelled) return;
+        setAvgScore(Number.isFinite(overallAvg) ? overallAvg : 0);
+      } catch (err) {
+        if (cancelled) return;
+        setLoadError(
+          err instanceof ApiError
+            ? err.message
+            : "No se pudo cargar tu dashboard.",
+        );
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    };
+    run();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const pillars = useMemo(
     () => [
@@ -103,9 +159,30 @@ export default function DashboardScreen() {
         <AppText variant="headline" colorName="onSurface">
           Dashboard: Engineer Console
         </AppText>
-        <AppText variant="body" colorName="secondary" style={{ opacity: 0.85 }}>
-          Welcome back, Engineer. Your system optimization is at 65%.
-        </AppText>
+        {isLoading ? (
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+            <ActivityIndicator color={primary} />
+            <AppText
+              variant="body"
+              colorName="secondary"
+              style={{ opacity: 0.85 }}
+            >
+              Cargando métricas...
+            </AppText>
+          </View>
+        ) : (
+          <AppText
+            variant="body"
+            colorName="secondary"
+            style={{ opacity: 0.85 }}
+          >
+            {loadError
+              ? loadError
+              : avgScore === null
+                ? "Sin métricas disponibles."
+                : `Promedio de puntaje: ${avgScore.toFixed(1)}/100`}
+          </AppText>
+        )}
       </View>
 
       <View
@@ -158,17 +235,24 @@ export default function DashboardScreen() {
             gap: 14,
           }}
         >
-          <ProgressRing value={0.65} label="Optimization" />
+          <ProgressRing
+            value={
+              avgScore === null ? 0 : Math.max(0, Math.min(1, avgScore / 100))
+            }
+            label="Promedio"
+          />
           <View style={{ alignItems: "center", gap: 2 }}>
             <AppText variant="title" colorName="onSurface">
-              Level 1 Complete
+              {avgScore === null
+                ? "Sin datos"
+                : `${Math.round(avgScore)} / 100`}
             </AppText>
             <AppText
               variant="body"
               colorName="secondary"
               style={{ fontSize: 13, opacity: 0.9 }}
             >
-              Core architectural principles validated.
+              Resultados basados en tus envíos de cuestionarios.
             </AppText>
           </View>
         </AppCard>
