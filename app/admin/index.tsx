@@ -1,9 +1,11 @@
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
-import { View, useWindowDimensions } from "react-native";
+import { useEffect, useState } from "react";
+import { ActivityIndicator, View, useWindowDimensions } from "react-native";
 
 import { AdminShell } from "@/components/admin/admin-shell";
 import { AppCard } from "@/components/design/app-card";
 import { AppText } from "@/components/design/app-text";
+import { ApiError, api } from "@/constants/api";
 import { useThemeColor } from "@/hooks/use-theme-color";
 
 export default function AdminDashboardScreen() {
@@ -15,6 +17,39 @@ export default function AdminDashboardScreen() {
   const surfaceHighest = useThemeColor({}, "surfaceContainerHighest");
 
   const isWide = width >= 900;
+  const [avgScore, setAvgScore] = useState<number | null>(null);
+  const [totalUsers, setTotalUsers] = useState<number | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    const run = async () => {
+      setIsLoading(true);
+      setError("");
+      try {
+        const [users, responses] = await Promise.all([
+          api.users.list({ skip: 0, limit: 5000 }),
+          api.userResponses.list({ skip: 0, limit: 5000 }),
+        ]);
+        const overallAvg =
+          responses.reduce((acc, it) => acc + (Number.isFinite(it.score) ? it.score : 0), 0) /
+          Math.max(1, responses.length);
+        if (cancelled) return;
+        setTotalUsers(users.length);
+        setAvgScore(Number.isFinite(overallAvg) ? overallAvg : 0);
+      } catch (err) {
+        if (cancelled) return;
+        setError(err instanceof ApiError ? err.message : "No se pudieron cargar métricas.");
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    };
+    run();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   return (
     <AdminShell
@@ -66,6 +101,18 @@ export default function AdminDashboardScreen() {
         >
           Visión general del rendimiento académico del sistema.
         </AppText>
+        {isLoading ? (
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+            <ActivityIndicator color={primary} />
+            <AppText variant="body" colorName="secondary">
+              Cargando...
+            </AppText>
+          </View>
+        ) : error ? (
+          <AppText variant="body" colorName="secondary">
+            {error}
+          </AppText>
+        ) : null}
       </View>
 
       <View
@@ -93,7 +140,7 @@ export default function AdminDashboardScreen() {
             colorName="onSurface"
             style={{ fontSize: 34 }}
           >
-            84.2%
+            {avgScore === null ? "—" : `${avgScore.toFixed(1)}%`}
           </AppText>
         </AppCard>
 
@@ -114,7 +161,7 @@ export default function AdminDashboardScreen() {
             colorName="onSurface"
             style={{ fontSize: 34 }}
           >
-            1,248
+            {totalUsers === null ? "—" : totalUsers.toLocaleString()}
           </AppText>
         </AppCard>
 
