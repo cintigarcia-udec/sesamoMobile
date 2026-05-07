@@ -1,28 +1,20 @@
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
-import { useMemo, useState } from "react";
-import { Pressable, View, useWindowDimensions } from "react-native";
+import { useEffect, useState } from "react";
+import {
+  ActivityIndicator,
+  Modal,
+  Pressable,
+  View,
+  useWindowDimensions,
+} from "react-native";
 
 import { AdminShell } from "@/components/admin/admin-shell";
 import { AppButton } from "@/components/design/app-button";
 import { AppCard } from "@/components/design/app-card";
 import { AppInput } from "@/components/design/app-input";
 import { AppText } from "@/components/design/app-text";
+import { ApiError, api, type User as ApiUser } from "@/constants/api";
 import { useThemeColor } from "@/hooks/use-theme-color";
-
-type Role = "Student" | "Teacher" | "Admin";
-type User = {
-  id: string;
-  name: string;
-  email: string;
-  role: Role;
-  status: "Active" | "Suspended";
-};
-
-const roleLabel = (role: Role) =>
-  role === "Student" ? "Estudiante" : role === "Teacher" ? "Docente" : "Admin";
-
-const statusLabel = (status: User["status"]) =>
-  status === "Active" ? "Activo" : "Suspendido";
 
 export default function AdminUsersScreen() {
   const { width } = useWindowDimensions();
@@ -32,52 +24,119 @@ export default function AdminUsersScreen() {
   const onPrimaryContainer = useThemeColor({}, "onPrimaryContainer");
   const error = useThemeColor({}, "error");
   const surfaceHighest = useThemeColor({}, "surfaceContainerHighest");
-  const surfaceLow = useThemeColor({}, "surfaceContainerLow");
 
   const [query, setQuery] = useState("");
-  const [role, setRole] = useState<Role | "All">("All");
+  const [users, setUsers] = useState<ApiUser[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
 
-  const users = useMemo<User[]>(
-    () => [
-      {
-        id: "S-1042",
-        name: "Alex Rivera",
-        email: "a.rivera@polytechnic.edu",
-        role: "Student",
-        status: "Active",
-      },
-      {
-        id: "S-2931",
-        name: "María Gómez",
-        email: "m.gomez@school.edu",
-        role: "Student",
-        status: "Active",
-      },
-      {
-        id: "T-021",
-        name: "Prof. Hernández",
-        email: "hernandez@school.edu",
-        role: "Teacher",
-        status: "Active",
-      },
-      {
-        id: "A-001",
-        name: "Engineering Admin",
-        email: "admin@syntactic.io",
-        role: "Admin",
-        status: "Active",
-      },
-    ],
-    [],
-  );
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editing, setEditing] = useState<ApiUser | null>(null);
+  const [name, setName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [emailValue, setEmailValue] = useState("");
+  const [schoolId, setSchoolId] = useState("");
+  const [password, setPassword] = useState("");
+  const [formError, setFormError] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+
+  const load = async () => {
+    setIsLoading(true);
+    setLoadError("");
+    try {
+      const items = await api.users.list({ skip: 0, limit: 2000 });
+      setUsers(items);
+    } catch (err) {
+      setLoadError(
+        err instanceof ApiError
+          ? err.message
+          : "No se pudieron cargar los usuarios.",
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    load();
+  }, []);
 
   const filtered = users.filter((u) => {
     const q = query.trim().toLowerCase();
     const matchesQuery =
-      !q || `${u.id} ${u.name} ${u.email}`.toLowerCase().includes(q);
-    const matchesRole = role === "All" || u.role === role;
-    return matchesQuery && matchesRole;
+      !q ||
+      `${u.id} ${u.name} ${u.last_name} ${u.email}`.toLowerCase().includes(q);
+    return matchesQuery;
   });
+
+  const openEdit = (u: ApiUser) => {
+    setEditing(u);
+    setName(u.name);
+    setLastName(u.last_name);
+    setEmailValue(u.email);
+    setSchoolId(String(u.school_id));
+    setPassword("");
+    setFormError("");
+    setIsModalOpen(true);
+  };
+
+  const closeModal = () => {
+    if (isSaving) return;
+    setIsModalOpen(false);
+  };
+
+  const save = async () => {
+    if (!editing || isSaving) return;
+    const nextSchoolId = Number(schoolId.trim());
+    if (!name.trim() || !lastName.trim() || !emailValue.trim()) {
+      setFormError("Nombre, apellido y correo son requeridos.");
+      return;
+    }
+    if (!Number.isFinite(nextSchoolId) || nextSchoolId <= 0) {
+      setFormError("school_id debe ser un entero positivo.");
+      return;
+    }
+    setIsSaving(true);
+    setFormError("");
+    try {
+      await api.users.update(editing.id, {
+        name: name.trim(),
+        last_name: lastName.trim(),
+        email: emailValue.trim(),
+        school_id: nextSchoolId,
+        password: password ? password : null,
+      });
+      setIsModalOpen(false);
+      await load();
+    } catch (err) {
+      setFormError(
+        err instanceof ApiError
+          ? err.message
+          : "No se pudo guardar el usuario.",
+      );
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const remove = async () => {
+    if (!editing || isSaving) return;
+    setIsSaving(true);
+    setFormError("");
+    try {
+      await api.users.delete(editing.id);
+      setIsModalOpen(false);
+      await load();
+    } catch (err) {
+      setFormError(
+        err instanceof ApiError
+          ? err.message
+          : "No se pudo eliminar el usuario.",
+      );
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   return (
     <AdminShell
@@ -119,7 +178,8 @@ export default function AdminUsersScreen() {
           colorName="secondary"
           style={{ opacity: 0.9, maxWidth: 860 }}
         >
-          Administra el acceso, monitorea la actividad y gestiona roles y estados de usuarios dentro de la plataforma.
+          Administra el acceso, monitorea la actividad y gestiona roles y
+          estados de usuarios dentro de la plataforma.
         </AppText>
       </View>
 
@@ -156,38 +216,6 @@ export default function AdminUsersScreen() {
             <View
               style={{ flexDirection: "row", gap: 10, alignItems: "center" }}
             >
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Cambiar rol"
-                onPress={() =>
-                  setRole((r) =>
-                    r === "All"
-                      ? "Student"
-                      : r === "Student"
-                        ? "Teacher"
-                        : r === "Teacher"
-                          ? "Admin"
-                          : "All",
-                  )
-                }
-                style={({ pressed }) => [
-                  {
-                    paddingHorizontal: 14,
-                    paddingVertical: 12,
-                    borderRadius: 12,
-                    backgroundColor: pressed ? surfaceHighest : surfaceLow,
-                  },
-                ]}
-              >
-                <View
-                  style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
-                >
-                  <MaterialIcons name="group" size={18} color={secondary} />
-                  <AppText variant="bodyStrong" colorName="secondary">
-                    {role === "All" ? "Todos los roles" : roleLabel(role)}
-                  </AppText>
-                </View>
-              </Pressable>
               <AppButton
                 onPress={() => {}}
                 leftIcon={
@@ -223,132 +251,126 @@ export default function AdminUsersScreen() {
             variant="headline"
             style={{ color: onPrimaryContainer, fontSize: 40 }}
           >
-            1,284
+            {users.length}
           </AppText>
         </AppCard>
       </View>
 
       <View style={{ marginTop: 14, gap: 10 }}>
-        {filtered.map((u) => (
-          <AppCard
-            key={u.id}
-            tone="low"
-            style={{ borderRadius: 22, padding: 0, overflow: "hidden" }}
-          >
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={`Abrir usuario ${u.name}`}
-              onPress={() => {}}
-              style={({ pressed }) => [
-                {
-                  padding: 16,
-                  backgroundColor: pressed ? surfaceHighest : "transparent",
-                },
-              ]}
+        {isLoading ? (
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+            <ActivityIndicator color={primary} />
+            <AppText variant="body" colorName="secondary">
+              Cargando...
+            </AppText>
+          </View>
+        ) : loadError ? (
+          <AppCard tone="low">
+            <AppText variant="bodyStrong">Error</AppText>
+            <AppText
+              variant="label"
+              colorName="secondary"
+              style={{ opacity: 0.85, marginTop: 6 }}
             >
-              <View
-                style={{
-                  flexDirection: width >= 720 ? "row" : "column",
-                  justifyContent: "space-between",
-                  gap: 12,
-                }}
+              {loadError}
+            </AppText>
+          </AppCard>
+        ) : (
+          filtered.map((u) => (
+            <AppCard
+              key={u.id}
+              tone="low"
+              style={{ borderRadius: 22, padding: 0, overflow: "hidden" }}
+            >
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Abrir usuario ${u.name}`}
+                onPress={() => openEdit(u)}
+                style={({ pressed }) => [
+                  {
+                    padding: 16,
+                    backgroundColor: pressed ? surfaceHighest : "transparent",
+                  },
+                ]}
               >
                 <View
                   style={{
-                    flexDirection: "row",
-                    alignItems: "center",
+                    flexDirection: width >= 720 ? "row" : "column",
+                    justifyContent: "space-between",
                     gap: 12,
-                    flex: 1,
                   }}
                 >
                   <View
                     style={{
-                      width: 44,
-                      height: 44,
-                      borderRadius: 16,
-                      backgroundColor: `${primary}14`,
+                      flexDirection: "row",
                       alignItems: "center",
-                      justifyContent: "center",
+                      gap: 12,
+                      flex: 1,
                     }}
                   >
-                    <MaterialIcons
-                      name={
-                        u.role === "Admin"
-                          ? "security"
-                          : u.role === "Teacher"
-                            ? "school"
-                            : "person"
-                      }
-                      size={22}
-                      color={primary}
-                    />
-                  </View>
-                  <View style={{ flex: 1, gap: 4 }}>
-                    <AppText variant="bodyStrong">{u.name}</AppText>
-                    <AppText
-                      variant="label"
-                      colorName="secondary"
-                      style={{ opacity: 0.85 }}
-                    >
-                      {u.email}
-                    </AppText>
-                  </View>
-                </View>
-                <View
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    gap: 10,
-                  }}
-                >
-                  <View
-                    style={{
-                      paddingHorizontal: 10,
-                      paddingVertical: 6,
-                      borderRadius: 999,
-                      backgroundColor: `${secondary}14`,
-                    }}
-                  >
-                    <AppText variant="labelCaps" colorName="secondary">
-                      {roleLabel(u.role)}
-                    </AppText>
-                  </View>
-                  <View
-                    style={{
-                      paddingHorizontal: 10,
-                      paddingVertical: 6,
-                      borderRadius: 999,
-                      backgroundColor:
-                        u.status === "Active" ? `${primary}14` : `${error}14`,
-                    }}
-                  >
-                    <AppText
-                      variant="labelCaps"
+                    <View
                       style={{
-                        color: u.status === "Active" ? primary : error,
+                        width: 44,
+                        height: 44,
+                        borderRadius: 16,
+                        backgroundColor: `${primary}14`,
+                        alignItems: "center",
+                        justifyContent: "center",
                       }}
                     >
-                      {statusLabel(u.status)}
-                    </AppText>
+                      <MaterialIcons name="person" size={22} color={primary} />
+                    </View>
+                    <View style={{ flex: 1, gap: 4 }}>
+                      <AppText variant="bodyStrong">
+                        {u.name} {u.last_name}
+                      </AppText>
+                      <AppText
+                        variant="label"
+                        colorName="secondary"
+                        style={{ opacity: 0.85 }}
+                      >
+                        {u.email}
+                      </AppText>
+                    </View>
                   </View>
-                  <AppText
-                    variant="labelCaps"
-                    colorName="secondary"
-                    style={{ opacity: 0.7 }}
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 10,
+                    }}
                   >
-                    {u.id}
-                  </AppText>
-                  <MaterialIcons
-                    name="chevron-right"
-                    size={22}
-                    color={secondary}
-                  />
+                    <View
+                      style={{
+                        paddingHorizontal: 10,
+                        paddingVertical: 6,
+                        borderRadius: 999,
+                        backgroundColor: `${secondary}14`,
+                      }}
+                    >
+                      <AppText variant="labelCaps" colorName="secondary">
+                        school_id: {u.school_id}
+                      </AppText>
+                    </View>
+                    <AppText
+                      variant="labelCaps"
+                      colorName="secondary"
+                      style={{ opacity: 0.7 }}
+                    >
+                      ID {u.id}
+                    </AppText>
+                    <MaterialIcons
+                      name="chevron-right"
+                      size={22}
+                      color={secondary}
+                    />
+                  </View>
                 </View>
-              </View>
-            </Pressable>
-          </AppCard>
-        ))}
-        {filtered.length === 0 ? (
+              </Pressable>
+            </AppCard>
+          ))
+        )}
+        {!isLoading && !loadError && filtered.length === 0 ? (
           <AppCard tone="low">
             <AppText variant="bodyStrong">No se encontraron usuarios</AppText>
             <AppText
@@ -361,6 +383,138 @@ export default function AdminUsersScreen() {
           </AppCard>
         ) : null}
       </View>
+
+      <Modal
+        visible={isModalOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={closeModal}
+      >
+        <Pressable
+          onPress={closeModal}
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.45)",
+            padding: 18,
+            justifyContent: "center",
+          }}
+        >
+          <Pressable
+            onPress={() => {}}
+            style={{ width: "100%", maxWidth: 720, alignSelf: "center" }}
+          >
+            <AppCard tone="lowest" style={{ gap: 12 }}>
+              <AppText variant="title" colorName="primary">
+                Editar usuario
+              </AppText>
+              <View
+                style={{
+                  flexDirection: width >= 720 ? "row" : "column",
+                  gap: 12,
+                }}
+              >
+                <View style={{ flex: 1, gap: 10 }}>
+                  <AppText
+                    variant="labelCaps"
+                    colorName="secondary"
+                    style={{ opacity: 0.8 }}
+                  >
+                    name
+                  </AppText>
+                  <AppInput value={name} onChangeText={setName} />
+                </View>
+                <View style={{ flex: 1, gap: 10 }}>
+                  <AppText
+                    variant="labelCaps"
+                    colorName="secondary"
+                    style={{ opacity: 0.8 }}
+                  >
+                    last_name
+                  </AppText>
+                  <AppInput value={lastName} onChangeText={setLastName} />
+                </View>
+              </View>
+              <View style={{ gap: 10 }}>
+                <AppText
+                  variant="labelCaps"
+                  colorName="secondary"
+                  style={{ opacity: 0.8 }}
+                >
+                  email
+                </AppText>
+                <AppInput
+                  value={emailValue}
+                  onChangeText={setEmailValue}
+                  autoCapitalize="none"
+                />
+              </View>
+              <View
+                style={{
+                  flexDirection: width >= 720 ? "row" : "column",
+                  gap: 12,
+                }}
+              >
+                <View style={{ flex: 1, gap: 10 }}>
+                  <AppText
+                    variant="labelCaps"
+                    colorName="secondary"
+                    style={{ opacity: 0.8 }}
+                  >
+                    school_id
+                  </AppText>
+                  <AppInput
+                    value={schoolId}
+                    onChangeText={setSchoolId}
+                    keyboardType="numeric"
+                  />
+                </View>
+                <View style={{ flex: 1, gap: 10 }}>
+                  <AppText
+                    variant="labelCaps"
+                    colorName="secondary"
+                    style={{ opacity: 0.8 }}
+                  >
+                    password (opcional)
+                  </AppText>
+                  <AppInput
+                    value={password}
+                    onChangeText={setPassword}
+                    secureTextEntry
+                  />
+                </View>
+              </View>
+              {formError ? (
+                <AppText variant="labelCaps" colorName="error">
+                  {formError}
+                </AppText>
+              ) : null}
+              <View
+                style={{
+                  flexDirection: "row",
+                  justifyContent: "space-between",
+                  gap: 10,
+                }}
+              >
+                <AppButton
+                  variant="secondary"
+                  textStyle={{ color: error }}
+                  onPress={remove}
+                >
+                  {isSaving ? "..." : "Eliminar"}
+                </AppButton>
+                <View style={{ flexDirection: "row", gap: 10 }}>
+                  <AppButton variant="tertiary" onPress={closeModal}>
+                    Cancelar
+                  </AppButton>
+                  <AppButton onPress={save}>
+                    {isSaving ? "Guardando..." : "Guardar"}
+                  </AppButton>
+                </View>
+              </View>
+            </AppCard>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </AdminShell>
   );
 }
