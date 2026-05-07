@@ -15,6 +15,7 @@ import { AppButton } from "@/components/design/app-button";
 import { AppInput } from "@/components/design/app-input";
 import { AppScreen } from "@/components/design/app-screen";
 import { AppText } from "@/components/design/app-text";
+import { ApiError, api } from "@/constants/api";
 import { useThemeColor } from "@/hooks/use-theme-color";
 
 export default function RegisterScreen() {
@@ -58,21 +59,12 @@ export default function RegisterScreen() {
   const surfaceHighest = useThemeColor({}, "surfaceContainerHighest");
   const outlineVariant = useThemeColor({}, "outlineVariant");
 
-  const API_BASE_URL = (
-    process.env.EXPO_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000/api/v1"
-  ).replace(/\/+$/, "");
-
   const DOCUMENT_TYPES = [
     { label: "CC", value: "cc" },
     { label: "CE", value: "ce" },
     { label: "TI", value: "ti" },
     { label: "PASAPORTE", value: "passport" },
   ] as const;
-
-  const schoolsUrl = useMemo(
-    () => `${API_BASE_URL}/schools/?skip=0&limit=100`,
-    [API_BASE_URL],
-  );
 
   const selectedSchool = useMemo(() => {
     const id = Number(schoolId);
@@ -183,48 +175,23 @@ export default function RegisterScreen() {
     setSchoolsError("");
 
     try {
-      const response = await fetch(schoolsUrl, { method: "GET" });
-      if (!response.ok) {
-        setSchoolsError(
-          "No se pudieron cargar las escuelas. Intenta nuevamente.",
-        );
-        return;
-      }
-
-      const data = (await response.json().catch(() => null)) as unknown;
-
-      const items = Array.isArray(data)
-        ? data
-        : ((data as { items?: unknown } | null)?.items ??
-          (data as { data?: unknown } | null)?.data ??
-          []);
-
-      if (!Array.isArray(items)) {
-        setSchoolsError("Respuesta inválida al cargar escuelas.");
-        return;
-      }
-
-      const normalized = items
-        .map((raw) => raw as Record<string, unknown>)
-        .map((raw) => ({
-          id: Number(raw.id),
-          name: typeof raw.name === "string" ? raw.name : undefined,
-          school_name:
-            typeof raw.school_name === "string" ? raw.school_name : undefined,
-          title: typeof raw.title === "string" ? raw.title : undefined,
-        }))
-        .filter((s) => Number.isFinite(s.id));
-
-      setSchools(normalized);
-      if (normalized.length === 0) {
+      const items = await api.schools.list({ skip: 0, limit: 100, auth: false });
+      setSchools(items);
+      if (items.length === 0) {
         setSchoolsError("No hay escuelas disponibles.");
       }
-    } catch {
-      setSchoolsError("No se pudo conectar al servidor para cargar escuelas.");
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setSchoolsError(err.message);
+      } else {
+        setSchoolsError(
+          "No se pudo conectar al servidor para cargar escuelas.",
+        );
+      }
     } finally {
       setIsSchoolsLoading(false);
     }
-  }, [schoolsUrl]);
+  }, []);
 
   useEffect(() => {
     fetchSchools();
@@ -274,41 +241,25 @@ export default function RegisterScreen() {
     setGeneralError("");
 
     try {
-      const response = await fetch(`${API_BASE_URL}/auth/register`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: name.trim(),
-          last_name: lastName.trim(),
-          email: email.trim(),
-          residential_address: residentialAddress.trim(),
-          type_document_identity: typeDocumentIdentity.trim().toLowerCase(),
-          document_identity: documentIdentity.trim(),
-          school_id: Number(schoolId.trim()),
-          password,
-        }),
+      await api.auth.register({
+        name: name.trim(),
+        last_name: lastName.trim(),
+        email: email.trim(),
+        residential_address: residentialAddress.trim(),
+        type_document_identity: typeDocumentIdentity.trim().toLowerCase(),
+        document_identity: documentIdentity.trim(),
+        school_id: Number(schoolId.trim()),
+        password,
       });
-
-      if (response.status === 201) {
-        router.replace("/auth/login");
-        return;
+      router.replace("/auth/login");
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setGeneralError(err.message);
+      } else {
+        setGeneralError(
+          "No se pudo conectar con el servidor. Revisa tu conexión e intenta nuevamente.",
+        );
       }
-
-      const data = (await response.json().catch(() => null)) as {
-        detail?: string | { msg?: string }[];
-      } | null;
-
-      const message =
-        typeof data?.detail === "string"
-          ? data.detail
-          : Array.isArray(data?.detail) && data?.detail?.[0]?.msg
-            ? data.detail[0].msg
-            : "No se pudo completar el registro. Intenta nuevamente.";
-      setGeneralError(message);
-    } catch {
-      setGeneralError(
-        "No se pudo conectar con el servidor. Revisa tu conexión e intenta nuevamente.",
-      );
     } finally {
       setIsLoading(false);
     }
