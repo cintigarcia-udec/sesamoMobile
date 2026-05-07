@@ -1,6 +1,6 @@
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Pressable, View, useWindowDimensions } from "react-native";
 
 import { AdminShell } from "@/components/admin/admin-shell";
@@ -8,15 +8,13 @@ import { AppButton } from "@/components/design/app-button";
 import { AppCard } from "@/components/design/app-card";
 import { AppInput } from "@/components/design/app-input";
 import { AppText } from "@/components/design/app-text";
-import { CodeBlock } from "@/components/design/code-block";
+import {
+  ApiError,
+  api,
+  type Category,
+  type Questionnaire,
+} from "@/constants/api";
 import { useThemeColor } from "@/hooks/use-theme-color";
-
-type EditableQuestion = {
-  id: string;
-  prompt: string;
-  code?: string;
-  answer: string;
-};
 
 export default function AdminQuestionnaireEditorScreen() {
   const router = useRouter();
@@ -26,38 +24,97 @@ export default function AdminQuestionnaireEditorScreen() {
   const primary = useThemeColor({}, "primary");
   const secondary = useThemeColor({}, "secondary");
   const surfaceHighest = useThemeColor({}, "surfaceContainerHighest");
-  const surfaceLow = useThemeColor({}, "surfaceContainerLow");
-  const onSecondaryContainer = useThemeColor({}, "onSecondaryContainer");
 
-  const [title, setTitle] = useState(
-    id === "ds-algo" ? "Estructuras de Datos y Algoritmos" : "Cuestionario",
-  );
-  const [description, setDescription] = useState(
-    "Evaluación avanzada para estudiantes de ingeniería enfocada en análisis de complejidad.",
-  );
+  const questionnaireId = useMemo(() => {
+    const raw = Array.isArray(id) ? id[0] : id;
+    const num = typeof raw === "string" ? Number(raw) : NaN;
+    return Number.isFinite(num) ? num : null;
+  }, [id]);
 
-  const [questions, setQuestions] = useState<EditableQuestion[]>(
-    useMemo(
-      () => [
-        {
-          id: "q1",
-          prompt:
-            "¿Cuál es la complejidad temporal de insertar en un árbol binario de búsqueda balanceado (BST)?",
-          code: "insert(node, value) => recorrer altura h, luego rotar/rebalancear",
-          answer: "O(log n)",
-        },
-        {
-          id: "q2",
-          prompt:
-            "¿Qué estructura de datos es la más adecuada para implementar una caché LRU?",
-          answer: "Mapa hash + lista doblemente enlazada",
-        },
-      ],
-      [],
-    ),
+  const [questionnaire, setQuestionnaire] = useState<Questionnaire | null>(
+    null,
   );
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [questionnaireNumber, setQuestionnaireNumber] = useState("");
+  const [categoryId, setCategoryId] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const run = async () => {
+      setIsLoading(true);
+      setError("");
+      try {
+        if (!questionnaireId) {
+          setError("Id inválido.");
+          return;
+        }
+        const [q, cats] = await Promise.all([
+          api.questionnaires.get(questionnaireId),
+          api.categories.list({ skip: 0, limit: 500 }),
+        ]);
+        if (cancelled) return;
+        setQuestionnaire(q);
+        setCategories(cats);
+        setQuestionnaireNumber(String(q.questionnaire_number));
+        setCategoryId(String(q.category_id));
+      } catch (err) {
+        if (cancelled) return;
+        setError(
+          err instanceof ApiError
+            ? err.message
+            : "No se pudo cargar el cuestionario.",
+        );
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    };
+    run();
+    return () => {
+      cancelled = true;
+    };
+  }, [questionnaireId]);
 
   const isWide = width >= 900;
+
+  const categoryLabel = useMemo(() => {
+    const cat = Number(categoryId);
+    if (!Number.isFinite(cat)) return "";
+    return categories.find((c) => c.id === cat)?.name ?? "";
+  }, [categoryId, categories]);
+
+  const save = async () => {
+    if (isSaving) return;
+    const num = Number(questionnaireNumber.trim());
+    const cat = Number(categoryId.trim());
+    if (!questionnaireId) return;
+    if (!Number.isFinite(num) || num <= 0) {
+      setError("questionnaire_number debe ser un entero positivo.");
+      return;
+    }
+    if (!Number.isFinite(cat) || cat <= 0) {
+      setError("category_id debe ser un entero positivo.");
+      return;
+    }
+    setIsSaving(true);
+    setError("");
+    try {
+      const updated = await api.questionnaires.update(questionnaireId, {
+        questionnaire_number: num,
+        category_id: cat,
+      });
+      setQuestionnaire(updated);
+      setQuestionnaireNumber(String(updated.questionnaire_number));
+      setCategoryId(String(updated.category_id));
+      router.back();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "No se pudo guardar.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   return (
     <AdminShell
@@ -155,14 +212,24 @@ export default function AdminQuestionnaireEditorScreen() {
               lineHeight: width >= 900 ? 56 : 44,
             }}
           >
-            {title}
+            {isLoading
+              ? "Cargando..."
+              : questionnaire
+                ? `Cuestionario #${questionnaire.questionnaire_number}`
+                : "Cuestionario"}
           </AppText>
           <AppText
             variant="body"
             colorName="secondary"
             style={{ opacity: 0.9, maxWidth: 760 }}
           >
-            {description}
+            {error
+              ? error
+              : categoryLabel
+                ? `Categoría: ${categoryLabel}`
+                : categoryId
+                  ? `category_id: ${categoryId}`
+                  : ""}
           </AppText>
         </View>
         <View style={{ flexDirection: "row", gap: 10 }}>
@@ -174,12 +241,12 @@ export default function AdminQuestionnaireEditorScreen() {
             Cancelar
           </AppButton>
           <AppButton
-            onPress={() => {}}
+            onPress={save}
             leftIcon={
               <MaterialIcons name="publish" size={18} color="#ffffff" />
             }
           >
-            Publicar
+            {isSaving ? "Guardando..." : "Guardar"}
           </AppButton>
         </View>
       </View>
@@ -202,12 +269,13 @@ export default function AdminQuestionnaireEditorScreen() {
               colorName="secondary"
               style={{ opacity: 0.75 }}
             >
-              Título
+              questionnaire_number
             </AppText>
             <AppInput
-              value={title}
-              onChangeText={setTitle}
-              accessibilityLabel="Título del cuestionario"
+              value={questionnaireNumber}
+              onChangeText={setQuestionnaireNumber}
+              accessibilityLabel="questionnaire_number"
+              keyboardType="numeric"
             />
           </View>
           <View style={{ gap: 10 }}>
@@ -216,127 +284,23 @@ export default function AdminQuestionnaireEditorScreen() {
               colorName="secondary"
               style={{ opacity: 0.75 }}
             >
-              Descripción
+              category_id
             </AppText>
             <AppInput
-              value={description}
-              onChangeText={setDescription}
-              accessibilityLabel="Descripción del cuestionario"
-              multiline
+              value={categoryId}
+              onChangeText={setCategoryId}
+              accessibilityLabel="category_id"
+              keyboardType="numeric"
             />
-          </View>
-        </AppCard>
-
-        <AppCard
-          tone="lowest"
-          style={{ flex: isWide ? 7 : undefined, borderRadius: 18, gap: 12 }}
-        >
-          <View
-            style={{
-              flexDirection: "row",
-              justifyContent: "space-between",
-              alignItems: "center",
-            }}
-          >
-            <AppText variant="title">Estructura de Preguntas</AppText>
-            <AppButton
-              variant="secondary"
-              onPress={() =>
-                setQuestions((prev) => [
-                  ...prev,
-                  {
-                    id: `q${prev.length + 1}`,
-                    prompt: "Nuevo enunciado de pregunta",
-                    answer: "",
-                  },
-                ])
-              }
-              leftIcon={
-                <MaterialIcons
-                  name="add"
-                  size={18}
-                  color={onSecondaryContainer}
-                />
-              }
-            >
-              Agregar Pregunta
-            </AppButton>
-          </View>
-
-          <View style={{ gap: 12 }}>
-            {questions.map((q) => (
-              <View
-                key={q.id}
-                style={{
-                  borderRadius: 18,
-                  padding: 14,
-                  backgroundColor: surfaceLow,
-                  gap: 10,
-                }}
+            {categoryLabel ? (
+              <AppText
+                variant="label"
+                colorName="secondary"
+                style={{ opacity: 0.85 }}
               >
-                <View
-                  style={{
-                    flexDirection: "row",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                  }}
-                >
-                  <AppText
-                    variant="labelCaps"
-                    colorName="secondary"
-                    style={{ opacity: 0.8 }}
-                  >
-                    {q.id.toUpperCase()}
-                  </AppText>
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={`Eliminar ${q.id}`}
-                    onPress={() =>
-                      setQuestions((prev) => prev.filter((x) => x.id !== q.id))
-                    }
-                    style={({ pressed }) => [
-                      {
-                        padding: 8,
-                        borderRadius: 999,
-                        backgroundColor: pressed
-                          ? surfaceHighest
-                          : "transparent",
-                      },
-                    ]}
-                  >
-                    <MaterialIcons name="delete" size={18} color={secondary} />
-                  </Pressable>
-                </View>
-
-                <AppInput
-                  value={q.prompt}
-                  onChangeText={(t) =>
-                    setQuestions((prev) =>
-                      prev.map((x) =>
-                        x.id === q.id ? { ...x, prompt: t } : x,
-                      ),
-                    )
-                  }
-                  accessibilityLabel={`Enunciado ${q.id}`}
-                  placeholder="Enunciado de la pregunta"
-                />
-
-                {q.code ? <CodeBlock>{q.code}</CodeBlock> : null}
-
-                <AppInput
-                  value={q.answer}
-                  onChangeText={(t) =>
-                    setQuestions((prev) =>
-                      prev.map((x) =>
-                        x.id === q.id ? { ...x, answer: t } : x,
-                      ),
-                    )
-                  }
-                  accessibilityLabel={`Respuesta ${q.id}`}
-                  placeholder="Respuesta esperada"
-                />
-              </View>
-            ))}
+                Categoría: {categoryLabel}
+              </AppText>
+            ) : null}
           </View>
         </AppCard>
       </View>
