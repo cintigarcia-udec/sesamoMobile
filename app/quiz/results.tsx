@@ -17,6 +17,7 @@ export default function QuizResultsScreen() {
     correct?: string;
     total?: string;
     time?: string;
+    submitError?: string;
   }>();
   const { width } = useWindowDimensions();
 
@@ -24,6 +25,7 @@ export default function QuizResultsScreen() {
   const correct = Number(params.correct ?? "18");
   const total = Number(params.total ?? "20");
   const time = String(params.time ?? "14:22");
+  const submitError = String(params.submitError ?? "").trim();
 
   const primary = useThemeColor({}, "primary");
   const primaryContainer = useThemeColor({}, "primaryContainer");
@@ -153,6 +155,11 @@ export default function QuizResultsScreen() {
                 ? "Aprobado"
                 : "Requiere repaso"}
           </AppText>
+          {submitError ? (
+            <AppText variant="label" style={{ color: "#ffffff", opacity: 0.85 }}>
+              Envío al servidor: {submitError}
+            </AppText>
+          ) : null}
 
           <View
             style={{
