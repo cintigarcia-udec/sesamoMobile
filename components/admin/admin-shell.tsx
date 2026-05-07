@@ -3,11 +3,11 @@ import { useRouter } from "expo-router";
 import { ReactNode, useMemo, useState } from "react";
 import { Modal, Pressable, ScrollView, View, useWindowDimensions } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
-import * as SecureStore from "expo-secure-store";
 
 import { AppCard } from "@/components/design/app-card";
 import { AppText } from "@/components/design/app-text";
 import { TopAppBar } from "@/components/design/top-app-bar";
+import { api, clearStoredAccessToken, clearStoredRefreshToken } from "@/constants/api";
 import { useThemeColor } from "@/hooks/use-theme-color";
 
 type AdminNavKey =
@@ -43,77 +43,17 @@ export function AdminShell({
   const surfaceLow = useThemeColor({}, "surfaceContainerLow");
   const surfaceHighest = useThemeColor({}, "surfaceContainerHighest");
 
-  const API_BASE_URL = (
-    process.env.EXPO_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000/api/v1"
-  ).replace(/\/+$/, "");
-  const ACCESS_TOKEN_KEY = "sesamo.access_token";
-
   const isWide = width >= 900;
-
-  const clearStoredToken = async () => {
-    delete (globalThis as any).__SESAMO_ACCESS_TOKEN__;
-    delete (globalThis as any).__SESAMO_JWT_PAYLOAD__;
-
-    if (process.env.EXPO_OS === "web") {
-      try {
-        (globalThis as any).localStorage?.removeItem(ACCESS_TOKEN_KEY);
-      } catch {
-        return;
-      }
-      return;
-    }
-
-    try {
-      const available = await SecureStore.isAvailableAsync();
-      if (!available) return;
-      await SecureStore.deleteItemAsync(ACCESS_TOKEN_KEY);
-    } catch {
-      return;
-    }
-  };
-
-  const getStoredToken = async () => {
-    const inMemory = (globalThis as any).__SESAMO_ACCESS_TOKEN__ as
-      | string
-      | undefined;
-    if (inMemory) return inMemory;
-
-    if (process.env.EXPO_OS === "web") {
-      try {
-        const stored = (globalThis as any).localStorage?.getItem(
-          ACCESS_TOKEN_KEY
-        ) as string | null | undefined;
-        return stored ?? null;
-      } catch {
-        return null;
-      }
-    }
-
-    try {
-      const available = await SecureStore.isAvailableAsync();
-      if (!available) return null;
-      return await SecureStore.getItemAsync(ACCESS_TOKEN_KEY);
-    } catch {
-      return null;
-    }
-  };
 
   const handleLogout = async () => {
     if (isLoggingOut) return;
     setIsLoggingOut(true);
 
     try {
-      const token = await getStoredToken();
-      if (token) {
-        await fetch(`${API_BASE_URL}/auth/logout`, {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-      }
+      await api.auth.logout().catch(() => undefined);
     } finally {
-      await clearStoredToken();
+      await clearStoredAccessToken();
+      await clearStoredRefreshToken();
       router.replace("/auth/login" as any);
       setIsLoggingOut(false);
     }
